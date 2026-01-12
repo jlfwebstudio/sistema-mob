@@ -1,137 +1,121 @@
-import { useMemo, useState } from 'react'
+import { useState, useMemo } from "react";
 
-function parseDataBR(str) {
-  if (!str) return null
-  const partes = str.split('/')
-  if (partes.length !== 3) return null
-  const [d, m, a] = partes
-  const dt = new Date(a, m - 1, d)
-  return isNaN(dt) ? null : dt
-}
+function Table({ data }) {
+  // Colunas na ORDEM EXATA que você pediu
+  const colunas = [
+    "Origem",
+    "Chamado",
+    "Numero Referencia",
+    "Contratante",
+    "Serviço",
+    "Status",
+    "Data Limite",
+    "Cliente",
+    "CNPJ / CPF",
+    "Cidade",
+    "Técnico",
+    "Prestador",
+    "Justificativa do Abono"
+  ];
 
-function Table({ data, allData, filtros, setFiltros }) {
-  const [expandedFilters, setExpandedFilters] = useState({})
+  // Filtros armazenam valores selecionados
+  const [filtros, setFiltros] = useState({});
 
-  const hoje = new Date()
-  hoje.setHours(0, 0, 0, 0)
-  const hoje_BR = hoje.toLocaleDateString('pt-BR')
+  function toggleFiltro(coluna, valor) {
+    setFiltros((prev) => {
+      const atual = prev[coluna] || [];
+      const existe = atual.includes(valor);
 
-  // Gera opções de filtro para cada coluna
-  const filterOptions = useMemo(() => {
-    const options = {}
+      const novo = existe
+        ? atual.filter((v) => v !== valor)
+        : [...atual, valor];
 
-    Object.keys(filtros).forEach(col => {
-      const valores = new Set()
-      allData?.forEach(row => {
-        const val = row[col]
-        if (val && String(val).trim()) {
-          valores.add(String(val))
-        } else {
-          valores.add('(Vazio)')
-        }
-      })
-      options[col] = Array.from(valores).sort()
-    })
-
-    return options
-  }, [allData, filtros])
-
-  const toggleFilter = (col, value) => {
-    setFiltros(prev => ({
-      ...prev,
-      [col]: prev[col].includes(value)
-        ? prev[col].filter(v => v !== value)
-        : [...prev[col], value]
-    }))
+      return { ...prev, [coluna]: novo };
+    });
   }
 
-  const toggleAllFilters = (col, selectAll) => {
-    setFiltros(prev => ({
-      ...prev,
-      [col]: selectAll ? filterOptions[col] : []
-    }))
-  }
+  // Lista de valores únicos por coluna
+  const valoresUnicos = useMemo(() => {
+    const obj = {};
+    colunas.forEach((col) => {
+      obj[col] = [...new Set(data.map((r) => r[col] || ""))];
+    });
+    return obj;
+  }, [data]);
 
-  // Função para determinar cor da linha
-  const getRowColor = (row) => {
-    const dataBr = row['Data Limite']
-    const d = parseDataBR(dataBr)
+  // Filtragem
+  const dadosFiltrados = useMemo(() => {
+    return data.filter((row) => {
+      return Object.entries(filtros).every(([col, valores]) => {
+        if (!valores.length) return true;
+        return valores.includes(row[col]);
+      });
+    });
+  }, [data, filtros]);
 
-    if (!d) return 'transparent'
-    if (d < hoje) return '#FFD4D4'  // Vermelho (atrasado)
-    if (dataBr === hoje_BR) return '#FFF8E1'  // Amarelo (hoje)
-    return 'transparent'
+  // Cores das linhas (hoje / atrasado)
+  function corLinha(row) {
+    const v = row["Data Limite"];
+    if (!v) return "";
+
+    const [d, m, a] = v.split("/");
+    const dataRow = new Date(a, m - 1, d);
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    if (dataRow < hoje) return "row-atrasado";
+    if (dataRow.getTime() === hoje.getTime()) return "row-hoje";
+
+    return "";
   }
 
   return (
-    <div className="table-container">
+    <div className="table-wrapper">
       <table className="data-table">
         <thead>
           <tr>
-            {Object.keys(filtros).map(col => (
+            {colunas.map((col) => (
               <th key={col}>
-                <div className="header-cell">
+                <div className="th-content">
                   <span>{col}</span>
-                  <button
-                    className="filter-btn"
-                    onClick={() => setExpandedFilters(prev => ({
-                      ...prev,
-                      [col]: !prev[col]
-                    }))}
-                    title="Filtrar"
-                  >
-                    ⚙️
-                  </button>
-                </div>
 
-                {expandedFilters[col] && (
                   <div className="filter-dropdown">
-                    <div className="filter-controls">
-                      <button
-                        onClick={() => toggleAllFilters(col, true)}
-                        className="filter-btn-small"
-                      >
-                        ✓ Todos
-                      </button>
-                      <button
-                        onClick={() => toggleAllFilters(col, false)}
-                        className="filter-btn-small"
-                      >
-                        ✗ Nenhum
-                      </button>
-                    </div>
-                    <div className="filter-options">
-                      {filterOptions[col]?.map(value => (
-                        <label key={value}>
+                    <button className="filter-btn">▼</button>
+
+                    <div className="filter-menu">
+                      {valoresUnicos[col].map((valor) => (
+                        <label key={valor} className="filter-option">
                           <input
                             type="checkbox"
-                            checked={filtros[col].includes(value)}
-                            onChange={() => toggleFilter(col, value)}
+                            checked={(filtros[col] || []).includes(valor)}
+                            onChange={() => toggleFiltro(col, valor)}
                           />
-                          {value}
+                          {valor || "—"}
                         </label>
                       ))}
                     </div>
                   </div>
-                )}
+                </div>
               </th>
             ))}
           </tr>
         </thead>
+
         <tbody>
-          {data?.map((row, idx) => (
-            <tr key={idx} style={{ backgroundColor: getRowColor(row) }}>
-              {Object.keys(filtros).map(col => (
-                <td key={`${idx}-${col}`}>
-                  {row[col] || '—'}
-                </td>
+          {dadosFiltrados.map((row, idx) => (
+            <tr
+              key={idx}
+              className={`${idx % 2 === 0 ? "row-par" : "row-impar"} ${corLinha(row)}`}
+            >
+              {colunas.map((col) => (
+                <td key={col}>{row[col] || "—"}</td>
               ))}
             </tr>
           ))}
         </tbody>
       </table>
     </div>
-  )
+  );
 }
 
-export default Table
+export default Table;

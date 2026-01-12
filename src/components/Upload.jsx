@@ -1,198 +1,123 @@
-import { useState } from 'react'
-import * as XLSX from 'xlsx'
+import { useState } from "react";
+import * as XLSX from "xlsx";
 
 function Upload({ onUpload }) {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [fileName, setFileName] = useState(null)
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [fileName, setFileName] = useState(null);
 
-  // Mapeamento: nome exato no Excel bruto → nome que queremos exibir
-  const mapeamentoColunas = {
-    'Origem': ['Chamado'],  // Sempre será "MOB"
-    'Chamado': ['Chamado'],
-    'Numero Referencia': ['Numero Referencia'],
-    'Contratante': ['Contratante'],
-    'Serviço': ['Serviço'],
-    'Status': ['Status'],
-    'Data Limite': ['Data Limite'],
-    'Cliente': ['Nome Cliente'],  // Mapeia "Nome Cliente" para "Cliente"
-    'CNPJ / CPF': ['CNPJ / CPF'],
-    'Cidade': ['Cidade'],
-    'Técnico': ['Técnico'],
-    'Prestador': ['Prestador'],
-    'Justificativa do Abono': ['Justificativa do Abono']
-  }
+  function normalizarData(v) {
+    if (!v && v !== 0) return "";
 
-  // Normaliza nome de coluna (remove acentos, espaços, lowercase)
-  function normalizar(str) {
-    return String(str || '')
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .trim()
-  }
-
-  // Encontra a chave real no objeto row que corresponde ao nome desejado
-  function encontrarColuna(row, nomeDesejado) {
-    const variacoes = mapeamentoColunas[nomeDesejado] || []
-    const todasVariacoes = [nomeDesejado, ...variacoes]
-
-    for (const key of Object.keys(row)) {
-      const keyNorm = normalizar(key)
-      if (todasVariacoes.some(v => normalizar(v) === keyNorm)) {
-        return key
-      }
-    }
-    return null
-  }
-
-  // Converte datas para DD/MM/YYYY
-  function normalizarData(valor) {
-    if (valor === null || valor === undefined || valor === '') return ''
-
-    // Se for Date object
-    if (valor instanceof Date) {
-      const dia = String(valor.getDate()).padStart(2, '0')
-      const mes = String(valor.getMonth() + 1).padStart(2, '0')
-      const ano = valor.getFullYear()
-      return `${dia}/${mes}/${ano}`
+    // Caso Date()
+    if (v instanceof Date) {
+      const d = String(v.getDate()).padStart(2, "0");
+      const m = String(v.getMonth() + 1).padStart(2, "0");
+      const a = v.getFullYear();
+      return `${d}/${m}/${a}`;
     }
 
-    // Se for número (serial Excel)
-    if (typeof valor === 'number') {
-      const parsed = XLSX.SSF.parse_date_code(valor)
-      if (parsed) {
-        const dia = String(parsed.d).padStart(2, '0')
-        const mes = String(parsed.m).padStart(2, '0')
-        const ano = parsed.y
-        return `${dia}/${mes}/${ano}`
-      }
+    // Caso número Excel
+    if (typeof v === "number") {
+      const p = XLSX.SSF.parse_date_code(v);
+      if (!p) return "";
+      return `${String(p.d).padStart(2, "0")}/${String(p.m).padStart(2, "0")}/${p.y}`;
     }
 
-    let v = String(valor).trim()
+    let s = String(v).trim();
 
-    // Se vier "Tue", "Mon", "Sun" etc. → ignora (dado inválido)
-    if (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].includes(v.toLowerCase())) {
-      return ''
+    // Ignorar valores tipo "Mon", "Tue"
+    const semana = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+    if (semana.includes(s.toLowerCase())) return "";
+
+    // Remover hora → "2026-01-12 00:00:00"
+    if (s.includes(" ")) s = s.split(" ")[0];
+
+    // ISO → 2026-01-12
+    const iso = s.split("-");
+    if (iso.length === 3 && iso[0].length === 4) {
+      return `${iso[2]}/${iso[1]}/${iso[0]}`;
     }
 
-    // Remove hora se vier "2025-01-30 00:00:00"
-    if (v.includes(' ')) v = v.split(' ')[0]
-
-    // Formato ISO: 2025-01-30 → converte para 30/01/2025
-    if (v.includes('-')) {
-      const partes = v.split('-')
+    // Formatos com barras
+    if (s.includes("/")) {
+      const partes = s.split("/");
       if (partes.length === 3) {
-        const [ano, mes, dia] = partes
-        return `${dia.padStart(2, '0')}/${mes.padStart(2, '0')}/${ano}`
+        const p1 = parseInt(partes[0]);
+        const p2 = parseInt(partes[1]);
+        const ano = partes[2];
+
+        // Se p1 > 12 → é dia
+        if (p1 > 12) return `${p1}/${p2}/${ano}`;
+        // Se p2 > 12 → p2 é dia → mm/dd/yyyy
+        if (p2 > 12) return `${p2}/${p1}/${ano}`;
+        // Ambos <= 12 → assume padrão BR
+        return `${partes[0].padStart(2, "0")}/${partes[1].padStart(2, "0")}/${ano}`;
       }
     }
 
-    // Se já vier dd/mm/aaaa, valida e retorna
-    if (v.includes('/')) {
-      const partes = v.split('/')
-      if (partes.length === 3) {
-        const [dia, mes, ano] = partes
-        // Verifica se é formato correto (dia/mes/ano)
-        if (dia.length <= 2 && mes.length <= 2 && ano.length === 4) {
-          return `${dia.padStart(2, '0')}/${mes.padStart(2, '0')}/${ano}`
-        }
-      }
-    }
-
-    return ''
+    return "";
   }
 
-  // Limpa CPF/CNPJ
-  function limparCpfCnpj(valor) {
-    if (!valor) return ''
-    return String(valor).replace(/["'=]/g, '').trim()
+  function limparCpfCnpj(v) {
+    if (!v) return "";
+    return String(v).replace(/["'=]/g, "").trim();
   }
 
   const handleFileChange = async (event) => {
-    const file = event.target.files[0]
-    if (!file) return
+    const file = event.target.files[0];
+    if (!file) return;
 
-    if (typeof onUpload !== 'function') {
-      setError('Erro interno: callback de upload não encontrado.')
-      return
+    if (typeof onUpload !== "function") {
+      setError("Erro interno: callback não encontrado");
+      return;
     }
 
-    setLoading(true)
-    setError(null)
-    setFileName(file.name)
+    setLoading(true);
+    setError(null);
+    setFileName(file.name);
 
     try {
-      const data = await file.arrayBuffer()
-      const workbook = XLSX.read(data, { type: 'array', cellDates: true })
-      const firstSheetName = workbook.SheetNames[0]
-      const worksheet = workbook.Sheets[firstSheetName]
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const bruto = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
-      const bruto = XLSX.utils.sheet_to_json(worksheet, { defval: '' })
-
-      if (!Array.isArray(bruto) || bruto.length === 0) {
-        setError('Arquivo vazio ou inválido.')
-        setLoading(false)
-        return
+      if (!bruto || !bruto.length) {
+        setError("Arquivo vazio");
+        setLoading(false);
+        return;
       }
 
-      // Colunas desejadas na ordem correta
-      const colunasDesejadas = [
-        'Origem',
-        'Chamado',
-        'Numero Referencia',
-        'Contratante',
-        'Serviço',
-        'Status',
-        'Data Limite',
-        'Cliente',
-        'CNPJ / CPF',
-        'Cidade',
-        'Técnico',
-        'Prestador',
-        'Justificativa do Abono'
-      ]
+      const final = bruto.map((row) => ({
+        "Origem": "MOB",
+        "Chamado": row["Chamado"] || "",
+        "Numero Referencia": row["Numero Referencia"] || "",
+        "Contratante": row["Contratante"] || "",
+        "Serviço": row["Serviço"] || "",
+        "Status": row["Status"] || "",
+        "Data Limite": normalizarData(row["Data Limite"]),
+        "Cliente": row["Nome Cliente"] || "",
+        "CNPJ / CPF": limparCpfCnpj(row["CNPJ / CPF"]),
+        "Cidade": row["Cidade"] || "",
+        "Técnico": row["Técnico"] || "",
+        "Prestador": row["Prestador"] || "",
+        "Justificativa do Abono": row["Justificativa do Abono"] || ""
+      }));
 
-      const filtrado = bruto.map(row => {
-        const novo = {}
-
-        colunasDesejadas.forEach(nomeDesejado => {
-          const chaveReal = encontrarColuna(row, nomeDesejado)
-          let valor = chaveReal ? row[chaveReal] : ''
-
-          // Transformações específicas
-          if (nomeDesejado === 'Origem') {
-            valor = 'MOB'  // Sempre "MOB"
-          }
-
-          if (nomeDesejado === 'Data Limite') {
-            valor = normalizarData(valor)
-          }
-
-          if (nomeDesejado === 'CNPJ / CPF') {
-            valor = limparCpfCnpj(valor)
-          }
-
-          novo[nomeDesejado] = valor
-        })
-
-        return novo
-      })
-
-      console.log('Linhas processadas:', filtrado.length)
-      onUpload(filtrado)
+      onUpload(final);
     } catch (err) {
-      console.error(err)
-      setError('Falha ao processar o arquivo.')
-    } finally {
-      setLoading(false)
+      console.error(err);
+      setError("Erro ao processar arquivo");
     }
-  }
+
+    setLoading(false);
+  };
 
   return (
     <div className="upload-box">
       <h2>Envie o relatório Mob</h2>
-      <p>Selecione o arquivo Excel/CSV para gerar o painel.</p>
+      <p>Selecione arquivo Excel/CSV</p>
 
       <label className="file-input-label">
         <input
@@ -200,17 +125,17 @@ function Upload({ onUpload }) {
           accept=".xlsx,.xls,.csv"
           onChange={handleFileChange}
           disabled={loading}
-          style={{ display: 'none' }}
+          style={{ display: "none" }}
         />
         <span className="file-input-button">
-          {loading ? '⏳ Processando...' : '📂 Escolher arquivo'}
+          {loading ? "⏳ Processando..." : "📂 Escolher arquivo"}
         </span>
       </label>
 
       {fileName && <p className="file-name">✓ {fileName}</p>}
       {error && <p className="error-message">{error}</p>}
     </div>
-  )
+  );
 }
 
-export default Upload
+export default Upload;
