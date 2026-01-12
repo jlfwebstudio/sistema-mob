@@ -6,15 +6,17 @@ function Upload({ onUpload }) {
   const [error, setError] = useState(null)
   const [fileName, setFileName] = useState(null)
 
+  // Remove caracteres indesejados de CPF/CNPJ
   function limparCpfCnpj(valor) {
     if (!valor) return ''
     return String(valor).replace(/["'=]/g, '').trim()
   }
 
+  // Normaliza data para DD/MM/AAAA, sem usar regex
   function normalizarData(valor) {
-    if (!valor) return ''
+    if (valor === null || valor === undefined || valor === '') return ''
 
-    // Date nativo
+    // 1) Date nativo
     if (valor instanceof Date && !isNaN(valor)) {
       const d = String(valor.getDate()).padStart(2, '0')
       const m = String(valor.getMonth() + 1).padStart(2, '0')
@@ -22,7 +24,7 @@ function Upload({ onUpload }) {
       return `${d}/${m}/${a}`
     }
 
-    // Número Excel (serial)
+    // 2) Número Excel (serial)
     if (typeof valor === 'number') {
       const data = XLSX.SSF.parse_date_code(valor)
       if (data) {
@@ -34,76 +36,63 @@ function Upload({ onUpload }) {
       return ''
     }
 
-    let s = String(valor).trim()
-    if (!s) return ''
+    // 3) String
+    let str = String(valor).trim()
+    if (!str) return ''
 
-    // Remove hora
-    if (s.includes(' ')) s = s.split(' ')[0]
-
-    // Formato ISO: 2026-01-12 → 12/01/2026
-    const isoParts = s.split('-')
-    if (isoParts.length === 3 && isoParts[0].length === 4) {
-      const [a, m, d] = isoParts
-      return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${a}`
+    // Remove hora, se vier "12/01/2026 00:00:00"
+    const espaco = str.indexOf(' ')
+    if (espaco !== -1) {
+      str = str.slice(0, espaco).trim()
     }
 
-    // Formato com barra
-    if (s.includes('/')) {
-      const p = s.split('/')
-      if (p.length === 3) {
-        const [p1, p2, p3] = p
+    // ISO: AAAA-MM-DD
+    const temHifen = str.indexOf('-') !== -1
+    if (temHifen) {
+      const partes = str.split('-')
+      if (partes.length === 3 && partes[0].length === 4) {
+        const ano = partes[0]
+        const mes = partes[1].padStart(2, '0')
+        const dia = partes[2].padStart(2, '0')
+        return `${dia}/${mes}/${ano}`
+      }
+    }
 
-        // Se p3 tem 4 dígitos, é o ano
+    // DD/MM/AAAA (padrão Mobyan) – sem regex
+    const temBarra = str.indexOf('/') !== -1
+    if (temBarra) {
+      const partes = str.split('/')
+      if (partes.length === 3) {
+        const p1 = partes[0].padStart(2, '0')
+        const p2 = partes[1].padStart(2, '0')
+        const p3 = partes[2]
+        // Só aceitamos se o "ano" tiver 4 dígitos
         if (p3.length === 4) {
-          const n1 = parseInt(p1, 10)
-          const n2 = parseInt(p2, 10)
-
-          // REGRA CRÍTICA: se p1 > 12, é DIA (formato BR: DD/MM/YYYY)
-          if (n1 > 12) {
-            return `${p1.padStart(2, '0')}/${p2.padStart(2, '0')}/${p3}`
-          }
-
-          // Se p2 > 12, é formato americano (MM/DD/YYYY) → inverte
-          if (n2 > 12) {
-            return `${p2.padStart(2, '0')}/${p1.padStart(2, '0')}/${p3}`
-          }
-
-          // Se ambos <= 12, assume BR (DD/MM/YYYY)
-          // EXCETO se p1 == 01 e p2 == 12 (provável americano 01/12 = 12 de janeiro)
-          // Nesse caso, inverte
-          if (n1 === 1 && n2 === 12) {
-            return `${p2.padStart(2, '0')}/${p1.padStart(2, '0')}/${p3}`
-          }
-
-          // Caso contrário, assume BR
-          return `${p1.padStart(2, '0')}/${p2.padStart(2, '0')}/${p3}`
+          return `${p1}/${p2}/${p3}`
         }
       }
     }
 
+    // Qualquer outra coisa: não arrisca
     return ''
   }
 
-  const statusPermitidos = (status) => {
+  // Status que queremos manter
+  function statusPermitidos(status) {
     if (!status) return false
     const s = String(status).toLowerCase()
     return (
-      s.includes('encaminh') ||
-      s.includes('transfer') ||
-      s.includes('campo') ||
-      s.includes('proced') ||
-      s.includes('reenc')
+      s.indexOf('encaminh') !== -1 || // encaminhado/encaminhada
+      s.indexOf('transfer') !== -1 || // em transferência
+      s.indexOf('campo') !== -1 ||    // em campo
+      s.indexOf('reenc') !== -1 ||    // reencaminhado
+      s.indexOf('proced') !== -1      // procedimento técnico
     )
   }
 
-  const handleFileChange = async (e) => {
+  async function handleFileChange(e) {
     const file = e.target.files?.[0]
     if (!file) return
-
-    if (typeof onUpload !== 'function') {
-      setError('Erro interno: callback não encontrado.')
-      return
-    }
 
     setLoading(true)
     setError(null)
@@ -112,12 +101,13 @@ function Upload({ onUpload }) {
     try {
       const buffer = await file.arrayBuffer()
       const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
-      const nomePrimeiraAba = workbook.SheetNames[0]
-      const sheet = workbook.Sheets[nomePrimeiraAba]
+      const primeiraAba = workbook.SheetNames[0]
+      const sheet = workbook.Sheets[primeiraAba]
+
       const bruto = XLSX.utils.sheet_to_json(sheet, { defval: '' })
 
       if (!Array.isArray(bruto) || bruto.length === 0) {
-        setError('Arquivo vazio ou formato inválido.')
+        setError('Arquivo vazio ou em formato inesperado.')
         setLoading(false)
         return
       }
@@ -135,17 +125,18 @@ function Upload({ onUpload }) {
           'CNPJ / CPF': limparCpfCnpj(row['CNPJ / CPF']),
           Cidade: row['Cidade'] || '',
           Técnico: row['Técnico'] || '',
-          Prestador: row['Prestador'] || '',
-          'Justificativa do Abono': row['Justificativa do Abono'] || ''
+          Prestador: row['Prestador'] || ''
+          // "Observações do Abono" foi intencionalmente descartada
         }))
         .filter(r => statusPermitidos(r.Status))
 
-      if (processados.length === 0) {
+      if (!processados.length) {
         setError('Nenhuma linha com status permitido encontrada.')
         setLoading(false)
         return
       }
 
+      // Ordena por Data Limite crescente
       processados.sort((a, b) => {
         const aStr = a['Data Limite'] || '99/99/9999'
         const bStr = b['Data Limite'] || '99/99/9999'
@@ -159,7 +150,7 @@ function Upload({ onUpload }) {
       onUpload(processados)
     } catch (err) {
       console.error(err)
-      setError('Erro ao ler o arquivo. Verifique o formato.')
+      setError('Erro ao processar o arquivo. Verifique se é .xlsx, .xls ou .csv.')
     } finally {
       setLoading(false)
     }
@@ -167,23 +158,22 @@ function Upload({ onUpload }) {
 
   return (
     <div className="upload-box">
-      <h2>📊 Importar Relatório Mob</h2>
-      <p>Selecione o arquivo (XLSX, XLS ou CSV)</p>
+      <h2>📊 Importar Relatório MOB</h2>
+      <p>Selecione um arquivo .xlsx, .xls ou .csv</p>
 
-      <label className="file-input-label">
-        <input
-          type="file"
-          accept=".xlsx,.xls,.csv"
-          onChange={handleFileChange}
-          disabled={loading}
-          style={{ display: 'none' }}
-        />
-      </label>
+      <input
+        id="mob-upload"
+        type="file"
+        accept=".xlsx,.xls,.csv"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+        disabled={loading}
+      />
 
       <button
         className="file-input-button"
         type="button"
-        onClick={() => document.querySelector('.upload-box input[type="file"]').click()}
+        onClick={() => document.getElementById('mob-upload').click()}
         disabled={loading}
       >
         {loading ? '⏳ Processando...' : '📂 Escolher Arquivo'}
