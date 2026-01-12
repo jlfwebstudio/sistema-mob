@@ -16,7 +16,7 @@ function Upload({ onUpload }) {
   function normalizarData(valor) {
     if (!valor) return ''
 
-    // 1) Date nativo
+    // 1) Date nativo (já está correto)
     if (valor instanceof Date && !isNaN(valor)) {
       const d = String(valor.getDate()).padStart(2, '0')
       const m = String(valor.getMonth() + 1).padStart(2, '0')
@@ -75,9 +75,21 @@ function Upload({ onUpload }) {
       }
 
       // Caso ambíguo (ambos p1 e p2 são <= 12):
-      // Se p1 é um mês baixo (1 ou 2) e p2 é um dia alto (>= 10),
-      // é mais provável que seja MM/DD/AAAA (ex: 01/12/2026 = 12 de janeiro)
-      if (p1 <= 2 && p2 >= 10) {
+      // Vamos tentar criar as duas datas e ver qual é válida e faz mais sentido.
+      // Priorizamos o formato DD/MM/AAAA, mas corrigimos se for claramente MM/DD/AAAA.
+      const dataBR = new Date(p3, p2 - 1, p1); // YYYY, MM-1, DD
+      const dataUS = new Date(p3, p1 - 1, p2); // YYYY, MM-1, DD (invertido)
+
+      const isValidBR = !isNaN(dataBR) && dataBR.getDate() === p1 && (dataBR.getMonth() + 1) === p2;
+      const isValidUS = !isNaN(dataUS) && dataUS.getDate() === p2 && (dataUS.getMonth() + 1) === p1;
+
+      // Se apenas o formato US é válido, ou se ambos são válidos mas o US parece mais provável
+      // (ex: 01/09/2026 no BR seria 1 de setembro, mas 09/01/2026 no US seria 1 de setembro)
+      // Se a data original é 09/01/2026 e o sistema está mostrando 01/09/2026,
+      // isso indica que o 09 é o mês e o 01 é o dia.
+      // Então, se a data original (p1/p2) é 09/01 e o sistema está invertendo,
+      // significa que p1 (09) é o mês e p2 (01) é o dia.
+      if (isValidUS && (!isValidBR || (p1 > p2 && p1 <= 12))) { // Ex: 09/01 -> 9 é mês, 1 é dia
         return `${String(p2).padStart(2, '0')}/${String(p1).padStart(2, '0')}/${p3}`
       }
 
