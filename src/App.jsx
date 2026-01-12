@@ -85,9 +85,64 @@ function App() {
       XLSX.utils.sheet_add_aoa(ws, [linha], { origin: -1 })
     })
 
-    ws['!cols'] = colunas.map(() => ({ wch: 18 }))
+    // Estilos mínimos bonitos
+    ws['!cols'] = colunas.map(() => ({ wch: 18 })) // Largura das colunas
 
-    const wb = XLSX.utils.book_new()
+    // Estilização do cabeçalho
+    const range = XLSX.utils.decode_range(ws['!ref'])
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const address = XLSX.utils.encode_col(C) + '1'
+      if (!ws[address]) continue
+      ws[address].s = {
+        font: { bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { fgColor: { rgb: '274472' } }, // Cor azul escura
+        alignment: { horizontal: 'center', vertical: 'center' },
+        border: {
+          top: { style: 'thin', color: { rgb: 'CCCCCC' } },
+          bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+          left: { style: 'thin', color: { rgb: 'CCCCCC' } },
+          right: { style: 'thin', color: { rgb: 'CCCCCC' } }
+        }
+      }
+    }
+
+    // Estilização das linhas (cores de prioridade)
+    for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+      const dataLimiteColIndex = colunas.indexOf('Data Limite')
+      if (dataLimiteColIndex === -1) continue
+
+      const cellAddr = XLSX.utils.encode_cell({ r: R, c: dataLimiteColIndex })
+      const cell = ws[cellAddr]
+      if (!cell || !cell.v) continue
+
+      const str = String(cell.v)
+      const [d, m, a] = str.split('/')
+      const dt = new Date(a, m - 1, d)
+      dt.setHours(0, 0, 0, 0)
+
+      let corFundo = 'FFFFFF' // Branco padrão
+      if (dt < hoje) {
+        corFundo = 'FFCCCC' // Vermelho claro (atrasado)
+      } else if (dt.getTime() === hoje.getTime()) {
+        corFundo = 'FFF4CC' // Amarelo claro (hoje)
+      }
+
+      // Aplica cor e bordas em todas as células da linha
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const addr = XLSX.utils.encode_cell({ r: R, c: C })
+        if (!ws[addr]) ws[addr] = { t: 's', v: '' } // Garante que a célula existe
+        ws[addr].s = {
+          fill: { fgColor: { rgb: corFundo } },
+          border: {
+            top: { style: 'thin', color: { rgb: 'CCCCCC' } },
+            bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+            left: { style: 'thin', color: { rgb: 'CCCCCC' } },
+            right: { style: 'thin', color: { rgb: 'CCCCCC' } }
+          }
+        }
+      }
+    }
+
     XLSX.utils.book_append_sheet(wb, ws, 'Pendências')
     XLSX.writeFile(wb, 'pendencias_mob.xlsx')
   }

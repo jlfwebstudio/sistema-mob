@@ -4,11 +4,13 @@ function Table({ data, allData, filtros, setFiltros }) {
   const [open, setOpen] = useState({})
   const tableRef = useRef(null)
 
+  // Fecha dropdown ao clicar fora ou ao abrir outro
   useEffect(() => {
     const handleClick = (e) => {
       if (!tableRef.current) return
+      // Se o clique não foi dentro da tabela (onde os filtros estão)
       if (!tableRef.current.contains(e.target)) {
-        setOpen({})
+        setOpen({}) // Fecha todos os filtros
       }
     }
     document.addEventListener('mousedown', handleClick)
@@ -19,6 +21,7 @@ function Table({ data, allData, filtros, setFiltros }) {
 
   const colunas = Object.keys(data[0])
 
+  // Opções de filtro
   const opcoes = useMemo(() => {
     const m = {}
     colunas.forEach(c => {
@@ -32,6 +35,7 @@ function Table({ data, allData, filtros, setFiltros }) {
   const toggleDropdown = (col) => {
     setOpen(prev => {
       const novo = {}
+      // Se o filtro clicado já estava aberto, fecha. Senão, abre ele e fecha os outros.
       novo[col] = !prev[col]
       return novo
     })
@@ -51,15 +55,18 @@ function Table({ data, allData, filtros, setFiltros }) {
   const limparColuna = (col) =>
     setFiltros({ ...filtros, [col]: [] })
 
+  // Cores especiais por data
   function cor(row) {
     const str = row['Data Limite']
     if (!str) return ''
     const [d, m, a] = str.split('/')
     const dt = new Date(a, m - 1, d)
     if (isNaN(dt)) return ''
+
     const hoje = new Date()
     hoje.setHours(0, 0, 0, 0)
     dt.setHours(0, 0, 0, 0)
+
     if (dt < hoje) return 'row-atrasado'
     if (dt.getTime() === hoje.getTime()) return 'row-hoje'
     return ''

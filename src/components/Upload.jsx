@@ -12,9 +12,9 @@ function Upload({ onUpload }) {
     return String(valor).replace(/["'=]/g, '').trim()
   }
 
-  // Normaliza data para DD/MM/AAAA, sem usar regex
+  // Normaliza data para DD/MM/AAAA, com detecção de formato MM/DD/AAAA
   function normalizarData(valor) {
-    if (valor === null || valor === undefined || valor === '') return ''
+    if (!valor) return ''
 
     // 1) Date nativo
     if (valor instanceof Date && !isNaN(valor)) {
@@ -40,40 +40,52 @@ function Upload({ onUpload }) {
     let str = String(valor).trim()
     if (!str) return ''
 
-    // Remove hora, se vier "12/01/2026 00:00:00"
+    // Remove hora (ex: "12/01/2026 00:00:00")
     const espaco = str.indexOf(' ')
     if (espaco !== -1) {
       str = str.slice(0, espaco).trim()
     }
 
-    // ISO: AAAA-MM-DD
-    const temHifen = str.indexOf('-') !== -1
-    if (temHifen) {
-      const partes = str.split('-')
-      if (partes.length === 3 && partes[0].length === 4) {
-        const ano = partes[0]
-        const mes = partes[1].padStart(2, '0')
-        const dia = partes[2].padStart(2, '0')
-        return `${dia}/${mes}/${ano}`
-      }
+    // Formato ISO: AAAA-MM-DD
+    const partesHifen = str.split('-')
+    if (partesHifen.length === 3 && partesHifen[0].length === 4) {
+      const [ano, mes, dia] = partesHifen
+      return `${dia.padStart(2, '0')}/${mes.padStart(2, '0')}/${ano}`
     }
 
-    // DD/MM/AAAA (padrão Mobyan) – sem regex
-    const temBarra = str.indexOf('/') !== -1
-    if (temBarra) {
-      const partes = str.split('/')
-      if (partes.length === 3) {
-        const p1 = partes[0].padStart(2, '0')
-        const p2 = partes[1].padStart(2, '0')
-        const p3 = partes[2]
-        // Só aceitamos se o "ano" tiver 4 dígitos
-        if (p3.length === 4) {
-          return `${p1}/${p2}/${p3}`
-        }
+    // Formato com barra: DD/MM/AAAA ou MM/DD/AAAA
+    const partesBarra = str.split('/')
+    if (partesBarra.length === 3) {
+      let p1 = parseInt(partesBarra[0], 10)
+      let p2 = parseInt(partesBarra[1], 10)
+      const p3 = partesBarra[2]
+
+      // Ano deve ter 4 dígitos
+      if (p3.length !== 4) return ''
+
+      // LÓGICA DE DETECÇÃO DE FORMATO MM/DD/AAAA vs DD/MM/AAAA:
+      // Se o primeiro número (p1) é maior que 12, ele só pode ser o dia (DD/MM/AAAA)
+      if (p1 > 12) {
+        return `${String(p1).padStart(2, '0')}/${String(p2).padStart(2, '0')}/${p3}`
       }
+
+      // Se o segundo número (p2) é maior que 12, ele só pode ser o dia (MM/DD/AAAA), então inverte
+      if (p2 > 12) {
+        return `${String(p2).padStart(2, '0')}/${String(p1).padStart(2, '0')}/${p3}`
+      }
+
+      // Caso ambíguo (ambos p1 e p2 são <= 12):
+      // Se p1 é um mês baixo (1 ou 2) e p2 é um dia alto (>= 10),
+      // é mais provável que seja MM/DD/AAAA (ex: 01/12/2026 = 12 de janeiro)
+      if (p1 <= 2 && p2 >= 10) {
+        return `${String(p2).padStart(2, '0')}/${String(p1).padStart(2, '0')}/${p3}`
+      }
+
+      // Por padrão, assume DD/MM/AAAA
+      return `${String(p1).padStart(2, '0')}/${String(p2).padStart(2, '0')}/${p3}`
     }
 
-    // Qualquer outra coisa: não arrisca
+    // Se não corresponde a nenhum formato conhecido, retorna vazio
     return ''
   }
 
@@ -82,11 +94,11 @@ function Upload({ onUpload }) {
     if (!status) return false
     const s = String(status).toLowerCase()
     return (
-      s.indexOf('encaminh') !== -1 || // encaminhado/encaminhada
-      s.indexOf('transfer') !== -1 || // em transferência
-      s.indexOf('campo') !== -1 ||    // em campo
-      s.indexOf('reenc') !== -1 ||    // reencaminhado
-      s.indexOf('proced') !== -1      // procedimento técnico
+      s.includes('encaminh') ||      // encaminhado, encaminhada...
+      s.includes('transfer') ||      // em transferência
+      s.includes('campo') ||         // em campo
+      s.includes('reenc') ||         // reencaminhado
+      s.includes('proced')           // procedimento técnico
     )
   }
 
@@ -142,7 +154,7 @@ function Upload({ onUpload }) {
         const bStr = b['Data Limite'] || '99/99/9999'
         const [d1, m1, a1] = aStr.split('/')
         const [d2, m2, a2] = bStr.split('/')
-        const v1 = `${a1}${m1}${d1}`
+        const v1 = `${a1}${m1}${d1}` // Converte para AAAA-MM-DD para comparação
         const v2 = `${a2}${m2}${d2}`
         return v1.localeCompare(v2)
       })
@@ -150,7 +162,7 @@ function Upload({ onUpload }) {
       onUpload(processados)
     } catch (err) {
       console.error(err)
-      setError('Erro ao processar o arquivo. Verifique se é .xlsx, .xls ou .csv.')
+      setError('Erro ao processar o arquivo. Verifique se está em .xlsx / .xls / .csv.')
     } finally {
       setLoading(false)
     }
