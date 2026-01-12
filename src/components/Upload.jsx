@@ -6,27 +6,35 @@ function Upload({ onUpload }) {
   const [error, setError] = useState(null)
   const [fileName, setFileName] = useState(null)
 
-  // Remove caracteres indesejados de CPF/CNPJ
   function limparCpfCnpj(valor) {
     if (!valor) return ''
     return String(valor).replace(/["'=]/g, '').trim()
   }
 
-  // Normaliza data para DD/MM/AAAA, com detecção de formato MM/DD/AAAA
-  function normalizarData(valor) {
-    if (!valor) return ''
+  /**
+   * normalizarData
+   * Regras:
+   * - Se já vier como string DD/MM/AAAA HH:mm ou DD/MM/AAAA → só remove a hora, NÃO inverte nada.
+   * - Se vier como Date ou número Excel → converte para DD/MM/AAAA.
+   * - Se vier como ISO AAAA-MM-DD → converte para DD/MM/AAAA.
+   * - NÃO tenta adivinhar americano; prefere sempre DD/MM.
+   */
+  function normalizarData(valorBruto) {
+    if (valorBruto === null || valorBruto === undefined || valorBruto === '') {
+      return ''
+    }
 
-    // 1) Date nativo (já está correto)
-    if (valor instanceof Date && !isNaN(valor)) {
-      const d = String(valor.getDate()).padStart(2, '0')
-      const m = String(valor.getMonth() + 1).padStart(2, '0')
-      const a = valor.getFullYear()
+    // 1) Date nativo
+    if (valorBruto instanceof Date && !isNaN(valorBruto)) {
+      const d = String(valorBruto.getDate()).padStart(2, '0')
+      const m = String(valorBruto.getMonth() + 1).padStart(2, '0')
+      const a = valorBruto.getFullYear()
       return `${d}/${m}/${a}`
     }
 
     // 2) Número Excel (serial)
-    if (typeof valor === 'number') {
-      const data = XLSX.SSF.parse_date_code(valor)
+    if (typeof valorBruto === 'number') {
+      const data = XLSX.SSF.parse_date_code(valorBruto)
       if (data) {
         const d = String(data.d).padStart(2, '0')
         const m = String(data.m).padStart(2, '0')
@@ -37,80 +45,50 @@ function Upload({ onUpload }) {
     }
 
     // 3) String
-    let str = String(valor).trim()
+    let str = String(valorBruto).trim()
     if (!str) return ''
 
-    // Remove hora (ex: "12/01/2026 00:00:00")
-    const espaco = str.indexOf(' ')
-    if (espaco !== -1) {
-      str = str.slice(0, espaco).trim()
+    // tira a hora, se tiver
+    if (str.includes(' ')) {
+      str = str.split(' ')[0].trim()
     }
 
-    // Formato ISO: AAAA-MM-DD
-    const partesHifen = str.split('-')
-    if (partesHifen.length === 3 && partesHifen[0].length === 4) {
-      const [ano, mes, dia] = partesHifen
-      return `${dia.padStart(2, '0')}/${mes.padStart(2, '0')}/${ano}`
+    // 3.1) ISO: 2026-01-09 → 09/01/2026
+    if (str.includes('-')) {
+      const partes = str.split('-')
+      if (partes.length === 3 && partes[0].length === 4) {
+        const [ano, mes, dia] = partes
+        return `${dia.padStart(2, '0')}/${mes.padStart(2, '0')}/${ano}`
+      }
     }
 
-    // Formato com barra: DD/MM/AAAA ou MM/DD/AAAA
-    const partesBarra = str.split('/')
-    if (partesBarra.length === 3) {
-      let p1 = parseInt(partesBarra[0], 10)
-      let p2 = parseInt(partesBarra[1], 10)
-      const p3 = partesBarra[2]
-
-      // Ano deve ter 4 dígitos
-      if (p3.length !== 4) return ''
-
-      // LÓGICA DE DETECÇÃO DE FORMATO MM/DD/AAAA vs DD/MM/AAAA:
-      // Se o primeiro número (p1) é maior que 12, ele só pode ser o dia (DD/MM/AAAA)
-      if (p1 > 12) {
-        return `${String(p1).padStart(2, '0')}/${String(p2).padStart(2, '0')}/${p3}`
+    // 3.2) Já está em DD/MM/AAAA ou D/M/AAAA → NÃO MEXE NA ORDEM
+    if (str.includes('/')) {
+      const partes = str.split('/')
+      if (partes.length === 3) {
+        let [p1, p2, p3] = partes.map(p => p.trim())
+        if (p3.length === 4) {
+          const dia = p1.padStart(2, '0')
+          const mes = p2.padStart(2, '0')
+          const ano = p3
+          return `${dia}/${mes}/${ano}`
+        }
       }
-
-      // Se o segundo número (p2) é maior que 12, ele só pode ser o dia (MM/DD/AAAA), então inverte
-      if (p2 > 12) {
-        return `${String(p2).padStart(2, '0')}/${String(p1).padStart(2, '0')}/${p3}`
-      }
-
-      // Caso ambíguo (ambos p1 e p2 são <= 12):
-      // Vamos tentar criar as duas datas e ver qual é válida e faz mais sentido.
-      // Priorizamos o formato DD/MM/AAAA, mas corrigimos se for claramente MM/DD/AAAA.
-      const dataBR = new Date(p3, p2 - 1, p1); // YYYY, MM-1, DD
-      const dataUS = new Date(p3, p1 - 1, p2); // YYYY, MM-1, DD (invertido)
-
-      const isValidBR = !isNaN(dataBR) && dataBR.getDate() === p1 && (dataBR.getMonth() + 1) === p2;
-      const isValidUS = !isNaN(dataUS) && dataUS.getDate() === p2 && (dataUS.getMonth() + 1) === p1;
-
-      // Se apenas o formato US é válido, ou se ambos são válidos mas o US parece mais provável
-      // (ex: 01/09/2026 no BR seria 1 de setembro, mas 09/01/2026 no US seria 1 de setembro)
-      // Se a data original é 09/01/2026 e o sistema está mostrando 01/09/2026,
-      // isso indica que o 09 é o mês e o 01 é o dia.
-      // Então, se a data original (p1/p2) é 09/01 e o sistema está invertendo,
-      // significa que p1 (09) é o mês e p2 (01) é o dia.
-      if (isValidUS && (!isValidBR || (p1 > p2 && p1 <= 12))) { // Ex: 09/01 -> 9 é mês, 1 é dia
-        return `${String(p2).padStart(2, '0')}/${String(p1).padStart(2, '0')}/${p3}`
-      }
-
-      // Por padrão, assume DD/MM/AAAA
-      return `${String(p1).padStart(2, '0')}/${String(p2).padStart(2, '0')}/${p3}`
     }
 
-    // Se não corresponde a nenhum formato conhecido, retorna vazio
+    // qualquer coisa diferente, ignora
     return ''
   }
 
-  // Status que queremos manter
   function statusPermitidos(status) {
     if (!status) return false
     const s = String(status).toLowerCase()
     return (
-      s.includes('encaminh') ||      // encaminhado, encaminhada...
-      s.includes('transfer') ||      // em transferência
-      s.includes('campo') ||         // em campo
-      s.includes('reenc') ||         // reencaminhado
-      s.includes('proced')           // procedimento técnico
+      s.includes('encaminh') ||
+      s.includes('transfer') ||
+      s.includes('campo') ||
+      s.includes('reenc') ||
+      s.includes('proced')
     )
   }
 
@@ -124,7 +102,14 @@ function Upload({ onUpload }) {
 
     try {
       const buffer = await file.arrayBuffer()
-      const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
+
+      // IMPORTANTE: cellDates = false pra NÃO deixar o XLSX converter tudo pra Date
+      const workbook = XLSX.read(buffer, {
+        type: 'array',
+        cellDates: false,
+        raw: false
+      })
+
       const primeiraAba = workbook.SheetNames[0]
       const sheet = workbook.Sheets[primeiraAba]
 
@@ -137,21 +122,25 @@ function Upload({ onUpload }) {
       }
 
       const processados = bruto
-        .map(row => ({
-          Origem: 'MOB',
-          Chamado: row['Chamado'] || '',
-          'Numero Referencia': row['Numero Referencia'] || '',
-          Contratante: row['Contratante'] || '',
-          Serviço: row['Serviço'] || '',
-          Status: row['Status'] || '',
-          'Data Limite': normalizarData(row['Data Limite']),
-          Cliente: row['Nome Cliente'] || '',
-          'CNPJ / CPF': limparCpfCnpj(row['CNPJ / CPF']),
-          Cidade: row['Cidade'] || '',
-          Técnico: row['Técnico'] || '',
-          Prestador: row['Prestador'] || ''
-          // "Observações do Abono" foi intencionalmente descartada
-        }))
+        .map(row => {
+          const valorOriginalData = row['Data Limite']
+
+          return {
+            Origem: 'MOB',
+            Chamado: row['Chamado'] || '',
+            'Numero Referencia': row['Numero Referencia'] || '',
+            Contratante: row['Contratante'] || '',
+            Serviço: row['Serviço'] || '',
+            Status: row['Status'] || '',
+            // aqui aplicamos a função nova
+            'Data Limite': normalizarData(valorOriginalData),
+            Cliente: row['Nome Cliente'] || '',
+            'CNPJ / CPF': limparCpfCnpj(row['CNPJ / CPF']),
+            Cidade: row['Cidade'] || '',
+            Técnico: row['Técnico'] || '',
+            Prestador: row['Prestador'] || ''
+          }
+        })
         .filter(r => statusPermitidos(r.Status))
 
       if (!processados.length) {
@@ -160,14 +149,14 @@ function Upload({ onUpload }) {
         return
       }
 
-      // Ordena por Data Limite crescente
+      // Ordena por data (sem alterar o formato mostrado)
       processados.sort((a, b) => {
         const aStr = a['Data Limite'] || '99/99/9999'
         const bStr = b['Data Limite'] || '99/99/9999'
-        const [d1, m1, a1] = aStr.split('/')
-        const [d2, m2, a2] = bStr.split('/')
-        const v1 = `${a1}${m1}${d1}` // Converte para AAAA-MM-DD para comparação
-        const v2 = `${a2}${m2}${d2}`
+        const [d1, m1, y1] = aStr.split('/')
+        const [d2, m2, y2] = bStr.split('/')
+        const v1 = `${y1}${m1}${d1}`
+        const v2 = `${y2}${m2}${d2}`
         return v1.localeCompare(v2)
       })
 
