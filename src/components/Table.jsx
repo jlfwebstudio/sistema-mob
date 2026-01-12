@@ -62,10 +62,10 @@ function Table({ data, allData, filtros, setFiltros }) {
     const dataBr = row['Data Limite']
     const d = parseDataBR(dataBr)
 
-    if (!d) return 'transparent'
-    if (d < hoje) return '#FFD4D4'
-    if (dataBr === hojeBR) return '#FFF8E1'
-    return 'transparent'
+    if (!d) return ''
+    if (d < hoje) return 'row-atrasado'
+    if (dataBr === hojeBR) return 'row-hoje'
+    return ''
   }
 
   return (
@@ -85,7 +85,7 @@ function Table({ data, allData, filtros, setFiltros }) {
                     }))}
                     title="Filtrar"
                   >
-                    ⚙️
+                    ▼
                   </button>
                 </div>
 
@@ -107,13 +107,13 @@ function Table({ data, allData, filtros, setFiltros }) {
                     </div>
                     <div className="filter-options">
                       {filterOptions[col]?.map(value => (
-                        <label key={value}>
+                        <label key={value} className="filter-option-label">
                           <input
                             type="checkbox"
                             checked={(filtros[col] || []).includes(value)}
                             onChange={() => toggleFilter(col, value)}
                           />
-                          {value}
+                          <span>{value}</span>
                         </label>
                       ))}
                     </div>
@@ -125,7 +125,7 @@ function Table({ data, allData, filtros, setFiltros }) {
         </thead>
         <tbody>
           {data?.map((row, idx) => (
-            <tr key={idx} style={{ backgroundColor: getRowColor(row) }}>
+            <tr key={idx} className={getRowColor(row)}>
               {colunas.map(col => (
                 <td key={`${idx}-${col}`}>
                   {row[col] || '—'}

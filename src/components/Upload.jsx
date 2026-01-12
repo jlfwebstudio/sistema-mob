@@ -14,7 +14,6 @@ function Upload({ onUpload }) {
   function normalizarData(valor) {
     if (valor === null || valor === undefined || valor === '') return ''
 
-    // Date nativo
     if (valor instanceof Date && !isNaN(valor)) {
       const d = String(valor.getDate()).padStart(2, '0')
       const m = String(valor.getMonth() + 1).padStart(2, '0')
@@ -22,7 +21,6 @@ function Upload({ onUpload }) {
       return `${d}/${m}/${a}`
     }
 
-    // Número Excel (serial)
     if (typeof valor === 'number') {
       const data = XLSX.SSF.parse_date_code(valor)
       if (data) {
@@ -34,26 +32,21 @@ function Upload({ onUpload }) {
       return ''
     }
 
-    // String
     let str = String(valor).trim()
 
-    // Ignorar strings tipo "Mon", "Tue"
     const semana = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
     if (semana.includes(str.toLowerCase())) return ''
 
-    // Remove hora: "2026-01-12 00:00:00" → "2026-01-12"
     if (str.includes(' ')) {
       str = str.split(' ')[0]
     }
 
-    // Formato ISO: 2026-01-12 (REGEX EM UMA LINHA SÓ)
     const iso = str.split('-')
     if (iso.length === 3 && iso[0].length === 4) {
       const [ano, mes, dia] = iso
       return `${dia.padStart(2, '0')}/${mes.padStart(2, '0')}/${ano}`
     }
 
-    // Formatos com barra
     if (str.includes('/')) {
       const partes = str.split('/')
       if (partes.length === 3 && partes[2].length === 4) {
@@ -61,17 +54,14 @@ function Upload({ onUpload }) {
         const n1 = parseInt(p1, 10)
         const n2 = parseInt(p2, 10)
 
-        // Se p1 > 12 → é dia (DD/MM/YYYY)
         if (n1 > 12) {
           return `${p1.padStart(2, '0')}/${p2.padStart(2, '0')}/${ano}`
         }
 
-        // Se p2 > 12 → formato americano (MM/DD/YYYY)
         if (n2 > 12) {
           return `${p2.padStart(2, '0')}/${p1.padStart(2, '0')}/${ano}`
         }
 
-        // Ambos <= 12 → assume BR
         return `${p1.padStart(2, '0')}/${p2.padStart(2, '0')}/${ano}`
       }
     }
@@ -120,7 +110,6 @@ function Upload({ onUpload }) {
         'Justificativa do Abono': row['Justificativa do Abono'] || ''
       }))
 
-      // Ordena por Data Limite (crescente)
       processados.sort((a, b) => {
         const [d1, m1, a1] = (a['Data Limite'] || '99/99/9999').split('/')
         const [d2, m2, a2] = (b['Data Limite'] || '99/99/9999').split('/')
@@ -132,7 +121,7 @@ function Upload({ onUpload }) {
       onUpload(processados)
     } catch (err) {
       console.error(err)
-      setError('Falha ao processar o arquivo.')
+      setError('Erro ao processar arquivo.')
     } finally {
       setLoading(false)
     }
@@ -141,12 +130,12 @@ function Upload({ onUpload }) {
   return (
     <div className="upload-box">
       <h2>📊 Enviar Relatório Mob</h2>
-      <p>Selecione o arquivo Excel (.xlsx/.xls)</p>
+      <p>Selecione o arquivo Excel ou CSV para processar.</p>
 
       <label className="file-input-label">
         <input
           type="file"
-          accept=".xlsx,.xls"
+          accept=".xlsx,.xls,.csv"
           onChange={handleFileChange}
           disabled={loading}
           style={{ display: 'none' }}
