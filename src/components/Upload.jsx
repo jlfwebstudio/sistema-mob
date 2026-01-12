@@ -14,6 +14,7 @@ function Upload({ onUpload }) {
   function normalizarData(valor) {
     if (!valor) return ''
 
+    // Date nativo
     if (valor instanceof Date && !isNaN(valor)) {
       const d = String(valor.getDate()).padStart(2, '0')
       const m = String(valor.getMonth() + 1).padStart(2, '0')
@@ -21,6 +22,7 @@ function Upload({ onUpload }) {
       return `${d}/${m}/${a}`
     }
 
+    // Número Excel (serial)
     if (typeof valor === 'number') {
       const data = XLSX.SSF.parse_date_code(valor)
       if (data) {
@@ -35,28 +37,45 @@ function Upload({ onUpload }) {
     let s = String(valor).trim()
     if (!s) return ''
 
+    // Remove hora
     if (s.includes(' ')) s = s.split(' ')[0]
 
+    // Formato ISO: 2026-01-12 → 12/01/2026
     const isoParts = s.split('-')
     if (isoParts.length === 3 && isoParts[0].length === 4) {
       const [a, m, d] = isoParts
       return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${a}`
     }
 
+    // Formato com barra
     if (s.includes('/')) {
       const p = s.split('/')
       if (p.length === 3) {
         const [p1, p2, p3] = p
+
+        // Se p3 tem 4 dígitos, é o ano
         if (p3.length === 4) {
           const n1 = parseInt(p1, 10)
           const n2 = parseInt(p2, 10)
 
+          // REGRA CRÍTICA: se p1 > 12, é DIA (formato BR: DD/MM/YYYY)
           if (n1 > 12) {
             return `${p1.padStart(2, '0')}/${p2.padStart(2, '0')}/${p3}`
           }
+
+          // Se p2 > 12, é formato americano (MM/DD/YYYY) → inverte
           if (n2 > 12) {
             return `${p2.padStart(2, '0')}/${p1.padStart(2, '0')}/${p3}`
           }
+
+          // Se ambos <= 12, assume BR (DD/MM/YYYY)
+          // EXCETO se p1 == 01 e p2 == 12 (provável americano 01/12 = 12 de janeiro)
+          // Nesse caso, inverte
+          if (n1 === 1 && n2 === 12) {
+            return `${p2.padStart(2, '0')}/${p1.padStart(2, '0')}/${p3}`
+          }
+
+          // Caso contrário, assume BR
           return `${p1.padStart(2, '0')}/${p2.padStart(2, '0')}/${p3}`
         }
       }

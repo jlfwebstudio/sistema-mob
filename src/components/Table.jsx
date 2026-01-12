@@ -1,7 +1,29 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 
 function Table({ data, allData, filtros, setFiltros }) {
   const [open, setOpen] = useState({})
+  const dropdownRefs = useRef({})
+
+  // Fecha dropdown ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      let clickedInside = false
+
+      Object.keys(dropdownRefs.current).forEach(col => {
+        const ref = dropdownRefs.current[col]
+        if (ref && ref.contains(e.target)) {
+          clickedInside = true
+        }
+      })
+
+      if (!clickedInside) {
+        setOpen({})
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   if (!Array.isArray(data) || data.length === 0) return null
 
@@ -21,7 +43,11 @@ function Table({ data, allData, filtros, setFiltros }) {
   }, [allData, colunas])
 
   const toggleDropdown = (col) => {
-    setOpen(p => ({ ...p, [col]: !p[col] }))
+    setOpen(prev => {
+      const novo = {}
+      novo[col] = !prev[col]
+      return novo
+    })
   }
 
   const toggleValor = (col, valor) => {
@@ -45,8 +71,8 @@ function Table({ data, allData, filtros, setFiltros }) {
     const dt = new Date(a, m - 1, d)
     if (isNaN(dt)) return ''
     const hoje = new Date()
-    hoje.setHours(0,0,0,0)
-    dt.setHours(0,0,0,0)
+    hoje.setHours(0, 0, 0, 0)
+    dt.setHours(0, 0, 0, 0)
     if (dt < hoje) return 'row-atrasado'
     if (dt.getTime() === hoje.getTime()) return 'row-hoje'
     return ''
@@ -59,7 +85,10 @@ function Table({ data, allData, filtros, setFiltros }) {
           <tr>
             {colunas.map(col => (
               <th key={col}>
-                <div className="header-cell">
+                <div
+                  className="header-cell"
+                  ref={el => dropdownRefs.current[col] = el}
+                >
                   <span>{col}</span>
                   <button
                     type="button"
@@ -68,39 +97,40 @@ function Table({ data, allData, filtros, setFiltros }) {
                   >
                     ▼
                   </button>
+
+                  {open[col] && (
+                    <div className="filter-dropdown">
+                      <div className="filter-controls">
+                        <button
+                          type="button"
+                          className="filter-btn-small seleciona"
+                          onClick={() => selecionarTodos(col)}
+                        >
+                          ✓ Todos
+                        </button>
+                        <button
+                          type="button"
+                          className="filter-btn-small limpa"
+                          onClick={() => limparColuna(col)}
+                        >
+                          ✗ Nenhum
+                        </button>
+                      </div>
+                      <div className="filter-options">
+                        {opcoes[col].map(o => (
+                          <label key={o} className="filter-option-label">
+                            <input
+                              type="checkbox"
+                              checked={(filtros[col] || []).includes(o)}
+                              onChange={() => toggleValor(col, o)}
+                            />
+                            {o}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                {open[col] && (
-                  <div className="filter-dropdown">
-                    <div className="filter-controls">
-                      <button
-                        type="button"
-                        className="filter-btn-small seleciona"
-                        onClick={() => selecionarTodos(col)}
-                      >
-                        ✓ Todos
-                      </button>
-                      <button
-                        type="button"
-                        className="filter-btn-small limpa"
-                        onClick={() => limparColuna(col)}
-                      >
-                        ✗ Nenhum
-                      </button>
-                    </div>
-                    <div className="filter-options">
-                      {opcoes[col].map(o => (
-                        <label key={o} className="filter-option-label">
-                          <input
-                            type="checkbox"
-                            checked={(filtros[col] || []).includes(o)}
-                            onChange={() => toggleValor(col, o)}
-                          />
-                          {o}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </th>
             ))}
           </tr>
