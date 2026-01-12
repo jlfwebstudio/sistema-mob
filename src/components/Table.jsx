@@ -1,119 +1,135 @@
-import { useState, useMemo } from 'react'
-import * as XLSX from 'xlsx'
+import { useMemo, useState } from 'react'
 
-function Table({ data }) {
-  const colunas = [
-    'Origem',
-    'Chamado',
-    'Numero Referencia',
-    'Contratante',
-    'Serviço',
-    'Status',
-    'Data Limite',
-    'Cliente',
-    'CNPJ / CPF',
-    'Cidade',
-    'Técnico',
-    'Prestador',
-    'Justificativa do Abono'
-  ]
+function parseDataBR(str) {
+  if (!str) return null
+  const partes = str.split('/')
+  if (partes.length !== 3) return null
+  const [d, m, a] = partes
+  const dt = new Date(a, m - 1, d)
+  return isNaN(dt) ? null : dt
+}
 
-  const [filtros, setFiltros] = useState({})
+function Table({ data, allData, filtros, setFiltros }) {
+  const [expandedFilters, setExpandedFilters] = useState({})
 
-  const opcoesUnicas = useMemo(() => {
-    const opcoes = {}
+  if (!data || data.length === 0) return null
+
+  const colunas = Object.keys(data[0])
+
+  const hoje = new Date()
+  hoje.setHours(0, 0, 0, 0)
+  const hojeBR = hoje.toLocaleDateString('pt-BR')
+
+  const filterOptions = useMemo(() => {
+    const options = {}
     colunas.forEach(col => {
-      opcoes[col] = [...new Set(data.map(row => row[col] || '—'))].sort()
-    })
-    return opcoes
-  }, [data])
+      const valores = new Set()
+      let temVazio = false
 
-  const toggleFiltro = (coluna, valor) => {
-    setFiltros(prev => {
-      const atual = prev[coluna] || []
-      const novo = atual.includes(valor)
-        ? atual.filter(v => v !== valor)
-        : [...atual, valor]
-      return { ...prev, [coluna]: novo }
-    })
-  }
-
-  const dadosFiltrados = useMemo(() => {
-    return data.filter(row => {
-      return colunas.every(col => {
-        const filtroAtivo = filtros[col]
-        if (!filtroAtivo || filtroAtivo.length === 0) return true
-        const valorCelula = row[col] || '—'
-        return filtroAtivo.includes(valorCelula)
+      allData.forEach(row => {
+        const v = row[col]
+        if (!v || String(v).trim() === '') {
+          temVazio = true
+        } else {
+          valores.add(String(v))
+        }
       })
+
+      const lista = Array.from(valores).sort()
+      if (temVazio) lista.unshift('(Vazio)')
+      options[col] = lista
     })
-  }, [data, filtros])
+    return options
+  }, [allData, colunas])
 
-  const getCorLinha = (row) => {
-    const dataLimite = row['Data Limite']
-    if (!dataLimite || dataLimite === '—') return ''
-
-    const [dia, mes, ano] = dataLimite.split('/').map(Number)
-    if (!dia || !mes || !ano) return ''
-
-    const limite = new Date(ano, mes - 1, dia)
-    const hoje = new Date()
-    hoje.setHours(0, 0, 0, 0)
-    limite.setHours(0, 0, 0, 0)
-
-    if (limite < hoje) return 'row-atrasado'
-    if (limite.getTime() === hoje.getTime()) return 'row-hoje'
-    return ''
+  const toggleFilter = (coluna, valor) => {
+    const atual = filtros[coluna] || []
+    const novo = atual.includes(valor)
+      ? atual.filter(v => v !== valor)
+      : [...atual, valor]
+    setFiltros({ ...filtros, [coluna]: novo })
   }
 
-  const exportarExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(dadosFiltrados)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Dados')
-    XLSX.writeFile(wb, 'relatorio_mobyan.xlsx')
+  const toggleAllFilters = (coluna, selecionar) => {
+    if (selecionar) {
+      setFiltros({ ...filtros, [coluna]: filterOptions[coluna] })
+    } else {
+      setFiltros({ ...filtros, [coluna]: [] })
+    }
+  }
+
+  function getRowColor(row) {
+    const dataBr = row['Data Limite']
+    const d = parseDataBR(dataBr)
+
+    if (!d) return 'transparent'
+    if (d < hoje) return '#FFD4D4'
+    if (dataBr === hojeBR) return '#FFF8E1'
+    return 'transparent'
   }
 
   return (
     <div className="table-container">
-      <div className="actions">
-        <button onClick={exportarExcel}>📥 Exportar para Excel</button>
-      </div>
-
       <table className="data-table">
         <thead>
           <tr>
             {colunas.map(col => (
               <th key={col}>
-                <div className="th-content">
+                <div className="header-cell">
                   <span>{col}</span>
+                  <button
+                    className="filter-btn"
+                    onClick={() => setExpandedFilters(prev => ({
+                      ...prev,
+                      [col]: !prev[col]
+                    }))}
+                    title="Filtrar"
+                  >
+                    ⚙️
+                  </button>
+                </div>
+
+                {expandedFilters[col] && (
                   <div className="filter-dropdown">
-                    <button className="filter-btn">▼</button>
-                    <div className="filter-menu">
-                      {opcoesUnicas[col]?.map(opcao => (
-                        <label key={opcao} className="filter-option">
+                    <div className="filter-controls">
+                      <button
+                        onClick={() => toggleAllFilters(col, true)}
+                        className="filter-btn-small"
+                      >
+                        ✓ Todos
+                      </button>
+                      <button
+                        onClick={() => toggleAllFilters(col, false)}
+                        className="filter-btn-small"
+                      >
+                        ✗ Nenhum
+                      </button>
+                    </div>
+                    <div className="filter-options">
+                      {filterOptions[col]?.map(value => (
+                        <label key={value}>
                           <input
                             type="checkbox"
-                            checked={(filtros[col] || []).includes(opcao)}
-                            onChange={() => toggleFiltro(col, opcao)}
+                            checked={(filtros[col] || []).includes(value)}
+                            onChange={() => toggleFilter(col, value)}
                           />
-                          <span>{opcao}</span>
+                          {value}
                         </label>
                       ))}
                     </div>
                   </div>
-                </div>
+                )}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {dadosFiltrados.map((row, idx) => (
-            <tr
-              key={idx}
-              className={`${idx % 2 === 0 ? 'row-par' : 'row-impar'} ${getCorLinha(row)}`}
-            >
+          {data?.map((row, idx) => (
+            <tr key={idx} style={{ backgroundColor: getRowColor(row) }}>
               {colunas.map(col => (
-                <td key={col}>{row[col] || '—'}</td>
+                <td key={`${idx}-${col}`}>
+                  {row[col] || '—'}
+                </td>
               ))}
             </tr>
           ))}
