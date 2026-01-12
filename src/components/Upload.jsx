@@ -6,21 +6,21 @@ function Upload({ onUpload }) {
   const [error, setError] = useState(null)
   const [fileName, setFileName] = useState(null)
 
-  // Mapeamento: nome que queremos → possíveis variações no Excel
+  // Mapeamento: nome exato no Excel bruto → nome que queremos exibir
   const mapeamentoColunas = {
-    'Origem': ['origem', 'origem chamado', 'origem_chamado', 'origemchamado'],
-    'Chamado': ['chamado', 'numero chamado', 'nº chamado', 'num chamado'],
-    'Numero Referencia': ['numero referencia', 'número referência', 'num referencia', 'numero_referencia', 'referencia'],
-    'Contratante': ['contratante'],
-    'Serviço': ['servico', 'serviço', 'tipo servico', 'tipo serviço'],
-    'Status': ['status'],
-    'Data Limite': ['data limite', 'data_limite', 'datalimite', 'dt limite', 'dt_limite'],
-    'Cliente': ['cliente', 'cliente/unidade', 'cliente unidade', 'unidade'],
-    'CNPJ / CPF': ['cnpj / cpf', 'cnpj/cpf', 'cpf/cnpj', 'cnpj', 'cpf', 'cpf_cnpj', 'cnpj_cpf'],
-    'Cidade': ['cidade'],
-    'Técnico': ['tecnico', 'técnico'],
-    'Prestador': ['prestador'],
-    'Justificativa do Abono': ['justificativa do abono', 'justificativa', 'justif abono', 'justif. abono', 'abono']
+    'Origem': ['Chamado'],  // Sempre será "MOB"
+    'Chamado': ['Chamado'],
+    'Numero Referencia': ['Numero Referencia'],
+    'Contratante': ['Contratante'],
+    'Serviço': ['Serviço'],
+    'Status': ['Status'],
+    'Data Limite': ['Data Limite'],
+    'Cliente': ['Nome Cliente'],  // Mapeia "Nome Cliente" para "Cliente"
+    'CNPJ / CPF': ['CNPJ / CPF'],
+    'Cidade': ['Cidade'],
+    'Técnico': ['Técnico'],
+    'Prestador': ['Prestador'],
+    'Justificativa do Abono': ['Justificativa do Abono']
   }
 
   // Normaliza nome de coluna (remove acentos, espaços, lowercase)
@@ -46,7 +46,7 @@ function Upload({ onUpload }) {
     return null
   }
 
-  // Converte datas (número Excel, Date object, string ISO, "Tue/Mon/Sun")
+  // Converte datas para DD/MM/YYYY
   function normalizarData(valor) {
     if (valor === null || valor === undefined || valor === '') return ''
 
@@ -79,7 +79,7 @@ function Upload({ onUpload }) {
     // Remove hora se vier "2025-01-30 00:00:00"
     if (v.includes(' ')) v = v.split(' ')[0]
 
-    // Formato ISO: 2025-01-30
+    // Formato ISO: 2025-01-30 → converte para 30/01/2025
     if (v.includes('-')) {
       const partes = v.split('-')
       if (partes.length === 3) {
@@ -88,8 +88,17 @@ function Upload({ onUpload }) {
       }
     }
 
-    // Se já vier dd/mm/aaaa
-    if (v.includes('/')) return v
+    // Se já vier dd/mm/aaaa, valida e retorna
+    if (v.includes('/')) {
+      const partes = v.split('/')
+      if (partes.length === 3) {
+        const [dia, mes, ano] = partes
+        // Verifica se é formato correto (dia/mes/ano)
+        if (dia.length <= 2 && mes.length <= 2 && ano.length === 4) {
+          return `${dia.padStart(2, '0')}/${mes.padStart(2, '0')}/${ano}`
+        }
+      }
+    }
 
     return ''
   }
@@ -127,7 +136,7 @@ function Upload({ onUpload }) {
         return
       }
 
-      // Mapeia cada linha para as 13 colunas desejadas
+      // Colunas desejadas na ordem correta
       const colunasDesejadas = [
         'Origem',
         'Chamado',
@@ -150,6 +159,11 @@ function Upload({ onUpload }) {
         colunasDesejadas.forEach(nomeDesejado => {
           const chaveReal = encontrarColuna(row, nomeDesejado)
           let valor = chaveReal ? row[chaveReal] : ''
+
+          // Transformações específicas
+          if (nomeDesejado === 'Origem') {
+            valor = 'MOB'  // Sempre "MOB"
+          }
 
           if (nomeDesejado === 'Data Limite') {
             valor = normalizarData(valor)
