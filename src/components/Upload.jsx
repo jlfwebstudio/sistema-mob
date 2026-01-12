@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import * as XLSX from 'xlsx'
 
 function Upload({ onUpload }) {
   const [loading, setLoading] = useState(false)
@@ -20,39 +21,30 @@ function Upload({ onUpload }) {
     setFileName(file.name)
 
     try {
-      const formData = new FormData()
-      formData.append('file', file)
+      // Ler o arquivo direto no navegador
+      const data = await file.arrayBuffer()
+      const workbook = XLSX.read(data, { type: 'array' })
 
-      const response = await fetch('http://127.0.0.1:8000/upload', {
-        method: 'POST',
-        body: formData
-      })
+      // Pega a primeira aba
+      const firstSheetName = workbook.SheetNames[0]
+      const worksheet = workbook.Sheets[firstSheetName]
 
-      if (!response.ok) {
-        throw new Error(`Erro na API: ${response.status}`)
-      }
+      // Converte para JSON (array de objetos)
+      const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' })
 
-      const json = await response.json()
-      console.log('Resposta bruta da API /upload:', json)
+      console.log('Linhas lidas do arquivo:', rows.length)
 
-      // Ajuste conforme o backend:
-      // se ele devolve { rows: [...] }, pegamos json.rows
-      // se devolve { data: [...] }, pegamos json.data
-      // se já devolve um array, usamos direto
-      const rows = Array.isArray(json) ? json : (json.rows || json.data)
-
-      if (!Array.isArray(rows)) {
-        console.error('Resposta da API não é um array:', json)
-        setError('Resposta inesperada do servidor.')
+      if (!Array.isArray(rows) || rows.length === 0) {
+        setError('Arquivo vazio ou formato inválido.')
         setLoading(false)
         return
       }
 
-      console.log('Linhas recebidas do backend:', rows.length)
+      // Chama o callback do App.jsx com os dados
       onUpload(rows)
     } catch (err) {
       console.error(err)
-      setError('Falha ao enviar arquivo. Verifique se o servidor backend está rodando.')
+      setError('Falha ao processar o arquivo. Verifique se é um Excel/CSV válido.')
     } finally {
       setLoading(false)
     }
