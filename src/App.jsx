@@ -1,220 +1,95 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import Upload from './components/Upload'
 import Table from './components/Table'
-import ExcelJS from 'exceljs'
-import { saveAs } from 'file-saver'
 import './App.css'
-
-const STATUS_VALIDOS = [
-  'encaminhada',
-  'em transferência',
-  'em campo',
-  'reencaminhado',
-  'proced. técnico'
-]
-
-const COLUNAS = [
-  'Origem',
-  'Chamado',
-  'Numero Referencia',
-  'Contratante',
-  'Serviço',
-  'Status',
-  'Data Limite',
-  'Cliente',
-  'CNPJ / CPF',
-  'Cidade',
-  'Técnico',
-  'Prestador',
-  'Justificativa do Abono'
-]
+import * as XLSX from 'xlsx'
 
 function App() {
-  const [data, setData] = useState(null)
-  const [filteredData, setFilteredData] = useState(null)
-  const [filtros, setFiltros] = useState(
-    Object.fromEntries(COLUNAS.map(c => [c, []]))
-  )
+  const [dados, setDados] = useState([])
+  const [filtros, setFiltros] = useState({})
+  const [tabelaVisivel, setTabelaVisivel] = useState(false)
 
-  function parseDataBR(str) {
-    if (!str) return null
-    const partes = str.split('/')
-    if (partes.length !== 3) return null
-    const [d, m, a] = partes.map(Number)
-    return new Date(a, m - 1, d)
-  }
+  const receberUpload = (lista) => {
+    setDados(lista)
+    setTabelaVisivel(true)
 
-  function statusOk(status) {
-    return STATUS_VALIDOS.some(v =>
-      String(status).toLowerCase().includes(v)
-    )
-  }
-
-  const handleUploadSuccess = (dados) => {
-    const filtrados = dados.filter(row => statusOk(row.Status))
-    setData(filtrados)
-    setFilteredData(filtrados)
-    setFiltros(Object.fromEntries(COLUNAS.map(c => [c, []])))
-  }
-
-  useMemo(() => {
-    if (!data) return
-
-    let resultado = [...data]
-
-    Object.keys(filtros).forEach(col => {
-      const selecionados = filtros[col]
-      if (!selecionados || selecionados.length === 0) return
-
-      resultado = resultado.filter(row => {
-        const valor = row[col] || ''
-        const vazio = !valor || String(valor).trim() === ''
-        const querVazio = selecionados.includes('(Vazio)')
-
-        if (vazio && querVazio) return true
-
-        const outros = selecionados.filter(v => v !== '(Vazio)')
-        return outros.some(v =>
-          String(valor).toLowerCase() === String(v).toLowerCase()
-        )
-      })
+    const inicial = {}
+    Object.keys(lista[0]).forEach(c => {
+      inicial[c] = []
     })
-
-    resultado.sort((a, b) => {
-      const dA = parseDataBR(a['Data Limite'])
-      const dB = parseDataBR(b['Data Limite'])
-      if (!dA && !dB) return 0
-      if (!dA) return 1
-      if (!dB) return -1
-      return dA - dB
-    })
-
-    setFilteredData(resultado)
-  }, [filtros, data])
-
-  const limparFiltros = () => {
-    setFiltros(Object.fromEntries(COLUNAS.map(c => [c, []])))
+    setFiltros(inicial)
   }
 
-  const hasData = filteredData && filteredData.length > 0
-  const temFiltrosAtivos = Object.values(filtros).some(v => v.length > 0)
+  const temFiltros = Object.values(filtros).some(f => f.length > 0)
 
-  async function exportarPendencias() {
-    if (!filteredData?.length) {
-      alert('Nenhum dado para exportar.')
-      return
+  const filtrar = (row) => {
+    for (const col of Object.keys(filtros)) {
+      const filtro = filtros[col]
+      if (filtro.length > 0 && !filtro.includes(String(row[col]))) return false
     }
+    return true
+  }
 
+  const dadosFiltrados = dados.filter(filtrar)
+
+  const exportarPendencias = () => {
     const hoje = new Date()
     hoje.setHours(0, 0, 0, 0)
 
-    const pend = filteredData.filter(row => {
-      const d = parseDataBR(row['Data Limite'])
-      return d && d <= hoje
+    const vencidos = dadosFiltrados.filter(row => {
+      const partes = row['Data Limite'].split('/')
+      const dt = new Date(partes[2], partes[1] - 1, partes[0])
+      dt.setHours(0, 0, 0, 0)
+      return dt <= hoje
     })
 
-    const pendFinal = pend.filter(r => statusOk(r.Status))
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet([])
 
-    if (!pendFinal.length) {
-      alert('Nenhuma OS pendente para exportar.')
-      return
-    }
+    const header = Object.keys(vencidos[0] || {})
+    XLSX.utils.sheet_add_aoa(ws, [header])
 
-    const workbook = new ExcelJS.Workbook()
-    const ws = workbook.addWorksheet('Pendências')
-
-    ws.columns = COLUNAS.map(key => ({
-      header: key,
-      key,
-      width: Math.min(
-        Math.max(key.length, ...pendFinal.map(r => String(r[key] || '').length)) + 2,
-        40
-      )
-    }))
-
-    ws.getRow(1).eachCell(cell => {
-      cell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF274472' }
-      }
-      cell.font = { color: { argb: 'FFFFFFFF' }, bold: true }
-      cell.alignment = { horizontal: 'center', vertical: 'middle' }
+    vencidos.forEach(row => {
+      XLSX.utils.sheet_add_aoa(ws, [Object.values(row)], { origin: -1 })
     })
 
-    pendFinal.forEach(row => {
-      ws.addRow(COLUNAS.map(c => row[c] || ''))
-    })
+    XLSX.utils.book_append_sheet(wb, ws, 'Pendências')
+    XLSX.writeFile(wb, 'pendencias_mob.xlsx')
+  }
 
-    const hojeBR = hoje.toLocaleDateString('pt-BR')
-
-    for (let i = 2; i <= ws.rowCount; i++) {
-      const row = ws.getRow(i)
-      const registro = pendFinal[i - 2]
-      const dataBr = registro['Data Limite']
-      const d = parseDataBR(dataBr)
-
-      let cor = (i % 2 === 0) ? 'FFF9F9F9' : 'FFFFFFFF'
-
-      if (d) {
-        if (d < hoje) cor = 'FFFAD4D4'
-        else if (dataBr === hojeBR) cor = 'FFFFF8E1'
-      }
-
-      row.eachCell(cell => {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: cor } }
-        cell.font = { color: { argb: 'FF000000' }, size: 10 }
-        cell.alignment = { vertical: 'middle', horizontal: 'left' }
-        cell.border = {
-          top: { style: 'thin', color: { argb: 'FFE0E0E0' } },
-          bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } },
-          left: { style: 'thin', color: { argb: 'FFE0E0E0' } },
-          right: { style: 'thin', color: { argb: 'FFE0E0E0' } }
-        }
-      })
-    }
-
-    ws.views = [{ state: 'frozen', ySplit: 1 }]
-
-    const buffer = await workbook.xlsx.writeBuffer()
-    saveAs(
-      new Blob([buffer], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      }),
-      `pendencias_mob_${new Date().toISOString().slice(0, 10)}.xlsx`
-    )
+  const limparFiltros = () => {
+    const inicial = {}
+    Object.keys(filtros).forEach(c => inicial[c] = [])
+    setFiltros(inicial)
   }
 
   return (
-    <div className={`App ${hasData ? 'tabela-visivel' : ''}`}>
-      {!hasData ? (
+    <div className={`App ${tabelaVisivel ? 'tabela-visivel' : ''}`}>
+      {!tabelaVisivel && (
         <>
           <header>
-            <h1>MOBYAN - Gestão de Chamados</h1>
-            <p>Painel automático de priorização e acompanhamento</p>
+            <h1>Sistema Mob – Painel de Chamados</h1>
+            <p>Faça upload do relatório para começar</p>
           </header>
 
           <div className="upload-container">
-            <Upload onUpload={handleUploadSuccess} />
+            <Upload onUpload={receberUpload} />
           </div>
         </>
-      ) : (
+      )}
+
+      {tabelaVisivel && (
         <>
           <header>
-            <h1>MOBYAN - Gestão de Chamados</h1>
+            <h1>Sistema Mob – Painel de Chamados</h1>
           </header>
 
           <div className="actions">
             <button className="download" onClick={exportarPendencias}>
               📥 Exportar Pendências
             </button>
-            <button onClick={() => {
-              setData(null)
-              setFilteredData(null)
-            }}>
-              🔄 Novo Upload
-            </button>
-            {temFiltrosAtivos && (
+            <button onClick={() => window.location.reload()}>🔄 Novo Upload</button>
+            {temFiltros && (
               <button className="limpar-filtros" onClick={limparFiltros}>
                 ✖ Limpar Filtros
               </button>
@@ -222,12 +97,12 @@ function App() {
           </div>
 
           <div className="info-registros">
-            Mostrando <strong>{filteredData?.length || 0}</strong> registros
+            Mostrando <strong>{dadosFiltrados.length}</strong> registros
           </div>
 
           <Table
-            data={filteredData}
-            allData={data}
+            data={dadosFiltrados}
+            allData={dados}
             filtros={filtros}
             setFiltros={setFiltros}
           />

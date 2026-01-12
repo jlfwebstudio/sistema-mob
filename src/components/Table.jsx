@@ -1,70 +1,49 @@
 import { useMemo, useState } from 'react'
 
-function parseDataBR(str) {
-  if (!str) return null
-  const partes = str.split('/')
-  if (partes.length !== 3) return null
-  const [d, m, a] = partes
-  const dt = new Date(a, m - 1, d)
-  return isNaN(dt) ? null : dt
-}
-
 function Table({ data, allData, filtros, setFiltros }) {
-  const [expandedFilters, setExpandedFilters] = useState({})
+  const [open, setOpen] = useState({})
 
   if (!data || data.length === 0) return null
 
   const colunas = Object.keys(data[0])
 
-  const hoje = new Date()
-  hoje.setHours(0, 0, 0, 0)
-  const hojeBR = hoje.toLocaleDateString('pt-BR')
-
-  const filterOptions = useMemo(() => {
-    const options = {}
-    colunas.forEach(col => {
+  const opcoes = useMemo(() => {
+    const m = {}
+    colunas.forEach(c => {
       const valores = new Set()
-      let temVazio = false
-
-      allData.forEach(row => {
-        const v = row[col]
-        if (!v || String(v).trim() === '') {
-          temVazio = true
-        } else {
-          valores.add(String(v))
-        }
-      })
-
-      const lista = Array.from(valores).sort()
-      if (temVazio) lista.unshift('(Vazio)')
-      options[col] = lista
+      allData.forEach(r => valores.add(String(r[c] || '(Vazio)')))
+      m[c] = Array.from(valores).sort()
     })
-    return options
-  }, [allData, colunas])
+    return m
+  }, [allData])
 
-  const toggleFilter = (coluna, valor) => {
-    const atual = filtros[coluna] || []
+  const toggle = (col) => {
+    setOpen(p => ({ ...p, [col]: !p[col] }))
+  }
+
+  const toggleValor = (col, valor) => {
+    const atual = filtros[col] || []
     const novo = atual.includes(valor)
       ? atual.filter(v => v !== valor)
       : [...atual, valor]
-    setFiltros({ ...filtros, [coluna]: novo })
+    setFiltros({ ...filtros, [col]: novo })
   }
 
-  const toggleAllFilters = (coluna, selecionar) => {
-    if (selecionar) {
-      setFiltros({ ...filtros, [coluna]: filterOptions[coluna] })
-    } else {
-      setFiltros({ ...filtros, [coluna]: [] })
-    }
-  }
+  const selecionarTodos = (col) =>
+    setFiltros({ ...filtros, [col]: opcoes[col] })
 
-  function getRowColor(row) {
-    const dataBr = row['Data Limite']
-    const d = parseDataBR(dataBr)
+  const limparColuna = (col) =>
+    setFiltros({ ...filtros, [col]: [] })
 
-    if (!d) return ''
-    if (d < hoje) return 'row-atrasado'
-    if (dataBr === hojeBR) return 'row-hoje'
+  function cor(row) {
+    if (!row['Data Limite']) return ''
+    const [d, m, a] = row['Data Limite'].split('/')
+    const dt = new Date(a, m - 1, d)
+    const hoje = new Date()
+    hoje.setHours(0,0,0,0)
+    dt.setHours(0,0,0,0)
+    if (dt < hoje) return 'row-atrasado'
+    if (dt.getTime() === hoje.getTime()) return 'row-hoje'
     return ''
   }
 
@@ -76,44 +55,26 @@ function Table({ data, allData, filtros, setFiltros }) {
             {colunas.map(col => (
               <th key={col}>
                 <div className="header-cell">
-                  <span>{col}</span>
-                  <button
-                    className="filter-btn"
-                    onClick={() => setExpandedFilters(prev => ({
-                      ...prev,
-                      [col]: !prev[col]
-                    }))}
-                    title="Filtrar"
-                  >
-                    ▼
-                  </button>
+                  {col}
+                  <button className="filter-btn" onClick={() => toggle(col)}>▼</button>
                 </div>
 
-                {expandedFilters[col] && (
+                {open[col] && (
                   <div className="filter-dropdown">
                     <div className="filter-controls">
-                      <button
-                        onClick={() => toggleAllFilters(col, true)}
-                        className="filter-btn-small"
-                      >
-                        ✓ Todos
-                      </button>
-                      <button
-                        onClick={() => toggleAllFilters(col, false)}
-                        className="filter-btn-small"
-                      >
-                        ✗ Nenhum
-                      </button>
+                      <button className="filter-btn-small" onClick={() => selecionarTodos(col)}>✓</button>
+                      <button className="filter-btn-small" onClick={() => limparColuna(col)}>✗</button>
                     </div>
+
                     <div className="filter-options">
-                      {filterOptions[col]?.map(value => (
-                        <label key={value} className="filter-option-label">
+                      {opcoes[col].map(o => (
+                        <label key={o} className="filter-option-label">
                           <input
                             type="checkbox"
-                            checked={(filtros[col] || []).includes(value)}
-                            onChange={() => toggleFilter(col, value)}
+                            checked={(filtros[col] || []).includes(o)}
+                            onChange={() => toggleValor(col, o)}
                           />
-                          <span>{value}</span>
+                          {o}
                         </label>
                       ))}
                     </div>
@@ -123,13 +84,12 @@ function Table({ data, allData, filtros, setFiltros }) {
             ))}
           </tr>
         </thead>
+
         <tbody>
-          {data?.map((row, idx) => (
-            <tr key={idx} className={getRowColor(row)}>
-              {colunas.map(col => (
-                <td key={`${idx}-${col}`}>
-                  {row[col] || '—'}
-                </td>
+          {data.map((r, i) (
+            <tr key={i} className={cor(r)}>
+              {colunas.map(c => (
+                <td key={c}>{r[c] || '—'}</td>
               ))}
             </tr>
           ))}

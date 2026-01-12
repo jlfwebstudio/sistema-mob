@@ -12,7 +12,7 @@ function Upload({ onUpload }) {
   }
 
   function normalizarData(valor) {
-    if (valor === null || valor === undefined || valor === '') return ''
+    if (!valor) return ''
 
     if (valor instanceof Date && !isNaN(valor)) {
       const d = String(valor.getDate()).padStart(2, '0')
@@ -32,41 +32,39 @@ function Upload({ onUpload }) {
       return ''
     }
 
-    let str = String(valor).trim()
+    let s = String(valor).trim()
 
-    const semana = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
-    if (semana.includes(str.toLowerCase())) return ''
+    if (s.includes(' ')) s = s.split(' ')[0]
 
-    if (str.includes(' ')) {
-      str = str.split(' ')[0]
-    }
-
-    const iso = str.split('-')
+    const iso = s.split('-')
     if (iso.length === 3 && iso[0].length === 4) {
-      const [ano, mes, dia] = iso
-      return `${dia.padStart(2, '0')}/${mes.padStart(2, '0')}/${ano}`
+      return `${iso[2].padStart(2, '0')}/${iso[1].padStart(2, '0')}/${iso[0]}`
     }
 
-    if (str.includes('/')) {
-      const partes = str.split('/')
-      if (partes.length === 3 && partes[2].length === 4) {
-        const [p1, p2, ano] = partes
-        const n1 = parseInt(p1, 10)
-        const n2 = parseInt(p2, 10)
-
-        if (n1 > 12) {
-          return `${p1.padStart(2, '0')}/${p2.padStart(2, '0')}/${ano}`
-        }
-
-        if (n2 > 12) {
-          return `${p2.padStart(2, '0')}/${p1.padStart(2, '0')}/${ano}`
-        }
-
-        return `${p1.padStart(2, '0')}/${p2.padStart(2, '0')}/${ano}`
+    if (s.includes('/')) {
+      const p = s.split('/')
+      if (p.length === 3) {
+        const d = p[0].padStart(2, '0')
+        const m = p[1].padStart(2, '0')
+        const a = p[2]
+        return `${d}/${m}/${a}`
       }
     }
 
     return ''
+  }
+
+  const statusPermitidos = status => {
+    if (!status) return false
+    const s = String(status).toLowerCase()
+
+    return (
+      s.includes('encaminh') ||
+      s.includes('campo') ||
+      s.includes('transfer') ||
+      s.includes('proced') ||
+      s.includes('reenc')
+    )
   }
 
   const handleFileChange = async (e) => {
@@ -86,33 +84,28 @@ function Upload({ onUpload }) {
       const buffer = await file.arrayBuffer()
       const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
       const sheet = workbook.Sheets[workbook.SheetNames[0]]
-      const bruto = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+      const linhas = XLSX.utils.sheet_to_json(sheet, { defval: '' })
 
-      if (!Array.isArray(bruto) || bruto.length === 0) {
-        setError('Arquivo vazio ou inválido.')
-        setLoading(false)
-        return
-      }
-
-      const processados = bruto.map(row => ({
-        'Origem': 'MOB',
-        'Chamado': row['Chamado'] || '',
-        'Numero Referencia': row['Numero Referencia'] || '',
-        'Contratante': row['Contratante'] || '',
-        'Serviço': row['Serviço'] || '',
-        'Status': row['Status'] || '',
-        'Data Limite': normalizarData(row['Data Limite']),
-        'Cliente': row['Nome Cliente'] || '',
-        'CNPJ / CPF': limparCpfCnpj(row['CNPJ / CPF']),
-        'Cidade': row['Cidade'] || '',
-        'Técnico': row['Técnico'] || '',
-        'Prestador': row['Prestador'] || '',
-        'Justificativa do Abono': row['Justificativa do Abono'] || ''
-      }))
+      const processados = linhas
+        .map(row => ({
+          'Origem': 'MOB',
+          'Chamado': row['Chamado'] || '',
+          'Numero Referencia': row['Numero Referencia'] || '',
+          'Contratante': row['Contratante'] || '',
+          'Serviço': row['Serviço'] || '',
+          'Status': row['Status'] || '',
+          'Data Limite': normalizarData(row['Data Limite']),
+          'Cliente': row['Nome Cliente'] || '',
+          'CNPJ / CPF': limparCpfCnpj(row['CNPJ / CPF']),
+          'Cidade': row['Cidade'] || '',
+          'Técnico': row['Técnico'] || '',
+          'Prestador': row['Prestador'] || ''
+        }))
+        .filter(x => statusPermitidos(x.Status))
 
       processados.sort((a, b) => {
-        const [d1, m1, a1] = (a['Data Limite'] || '99/99/9999').split('/')
-        const [d2, m2, a2] = (b['Data Limite'] || '99/99/9999').split('/')
+        const [d1, m1, a1] = a['Data Limite'].split('/')
+        const [d2, m2, a2] = b['Data Limite'].split('/')
         const v1 = `${a1}${m1}${d1}`
         const v2 = `${a2}${m2}${d2}`
         return v1.localeCompare(v2)
@@ -120,8 +113,8 @@ function Upload({ onUpload }) {
 
       onUpload(processados)
     } catch (err) {
-      console.error(err)
       setError('Erro ao processar arquivo.')
+      console.error(err)
     } finally {
       setLoading(false)
     }
@@ -129,8 +122,8 @@ function Upload({ onUpload }) {
 
   return (
     <div className="upload-box">
-      <h2>📊 Enviar Relatório Mob</h2>
-      <p>Selecione o arquivo Excel ou CSV para processar.</p>
+      <h2>📊 Importar Relatório Mob</h2>
+      <p>Selecione o arquivo (XLSX, XLS ou CSV)</p>
 
       <label className="file-input-label">
         <input
