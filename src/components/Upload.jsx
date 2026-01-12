@@ -6,52 +6,95 @@ function Upload({ onUpload }) {
   const [error, setError] = useState(null)
   const [fileName, setFileName] = useState(null)
 
-  // As 13 colunas oficiais do relatório Mob
-  const colunasPermitidas = [
-    'Origem',
-    'Chamado',
-    'Numero Referencia',
-    'Contratante',
-    'Serviço',
-    'Status',
-    'Data Limite',
-    'Cliente',
-    'CNPJ / CPF',
-    'Cidade',
-    'Técnico',
-    'Prestador',
-    'Justificativa do Abono'
-  ]
+  // Mapeamento: nome que queremos → possíveis variações no Excel
+  const mapeamentoColunas = {
+    'Origem': ['origem', 'origem chamado', 'origem_chamado', 'origemchamado'],
+    'Chamado': ['chamado', 'numero chamado', 'nº chamado', 'num chamado'],
+    'Numero Referencia': ['numero referencia', 'número referência', 'num referencia', 'numero_referencia', 'referencia'],
+    'Contratante': ['contratante'],
+    'Serviço': ['servico', 'serviço', 'tipo servico', 'tipo serviço'],
+    'Status': ['status'],
+    'Data Limite': ['data limite', 'data_limite', 'datalimite', 'dt limite', 'dt_limite'],
+    'Cliente': ['cliente', 'cliente/unidade', 'cliente unidade', 'unidade'],
+    'CNPJ / CPF': ['cnpj / cpf', 'cnpj/cpf', 'cpf/cnpj', 'cnpj', 'cpf', 'cpf_cnpj', 'cnpj_cpf'],
+    'Cidade': ['cidade'],
+    'Técnico': ['tecnico', 'técnico'],
+    'Prestador': ['prestador'],
+    'Justificativa do Abono': ['justificativa do abono', 'justificativa', 'justif abono', 'justif. abono', 'abono']
+  }
 
-  // Converte datas Excel (ex: 46266) para dd/mm/aaaa
+  // Normaliza nome de coluna (remove acentos, espaços, lowercase)
+  function normalizar(str) {
+    return String(str || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+  }
+
+  // Encontra a chave real no objeto row que corresponde ao nome desejado
+  function encontrarColuna(row, nomeDesejado) {
+    const variacoes = mapeamentoColunas[nomeDesejado] || []
+    const todasVariacoes = [nomeDesejado, ...variacoes]
+
+    for (const key of Object.keys(row)) {
+      const keyNorm = normalizar(key)
+      if (todasVariacoes.some(v => normalizar(v) === keyNorm)) {
+        return key
+      }
+    }
+    return null
+  }
+
+  // Converte datas (número Excel, Date object, string ISO, "Tue/Mon/Sun")
   function normalizarData(valor) {
     if (valor === null || valor === undefined || valor === '') return ''
 
-    // Se vier como número (serial Excel)
+    // Se for Date object
+    if (valor instanceof Date) {
+      const dia = String(valor.getDate()).padStart(2, '0')
+      const mes = String(valor.getMonth() + 1).padStart(2, '0')
+      const ano = valor.getFullYear()
+      return `${dia}/${mes}/${ano}`
+    }
+
+    // Se for número (serial Excel)
     if (typeof valor === 'number') {
       const parsed = XLSX.SSF.parse_date_code(valor)
-      if (!parsed) return ''
-      const dia = String(parsed.d).padStart(2, '0')
-      const mes = String(parsed.m).padStart(2, '0')
-      const ano = parsed.y
-      return `${dia}/${mes}/${ano}`
+      if (parsed) {
+        const dia = String(parsed.d).padStart(2, '0')
+        const mes = String(parsed.m).padStart(2, '0')
+        const ano = parsed.y
+        return `${dia}/${mes}/${ano}`
+      }
     }
 
     let v = String(valor).trim()
 
-    // Tira hora caso venha "2025-01-30 00:00:00"
-    if (v.includes(' ')) v = v.split(' ')[0]
-
-    // Formato ISO 2025-01-30
-    if (v.includes('-')) {
-      const [ano, mes, dia] = v.split('-')
-      return `${dia.padStart(2, '0')}/${mes.padStart(2, '0')}/${ano}`
+    // Se vier "Tue", "Mon", "Sun" etc. → ignora (dado inválido)
+    if (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].includes(v.toLowerCase())) {
+      return ''
     }
 
-    return v
+    // Remove hora se vier "2025-01-30 00:00:00"
+    if (v.includes(' ')) v = v.split(' ')[0]
+
+    // Formato ISO: 2025-01-30
+    if (v.includes('-')) {
+      const partes = v.split('-')
+      if (partes.length === 3) {
+        const [ano, mes, dia] = partes
+        return `${dia.padStart(2, '0')}/${mes.padStart(2, '0')}/${ano}`
+      }
+    }
+
+    // Se já vier dd/mm/aaaa
+    if (v.includes('/')) return v
+
+    return ''
   }
 
-  // Limpeza de CPF/CNPJ (remove =, aspas, etc.)
+  // Limpa CPF/CNPJ
   function limparCpfCnpj(valor) {
     if (!valor) return ''
     return String(valor).replace(/["'=]/g, '').trim()
@@ -78,26 +121,51 @@ function Upload({ onUpload }) {
 
       const bruto = XLSX.utils.sheet_to_json(worksheet, { defval: '' })
 
+      if (!Array.isArray(bruto) || bruto.length === 0) {
+        setError('Arquivo vazio ou inválido.')
+        setLoading(false)
+        return
+      }
+
+      // Mapeia cada linha para as 13 colunas desejadas
+      const colunasDesejadas = [
+        'Origem',
+        'Chamado',
+        'Numero Referencia',
+        'Contratante',
+        'Serviço',
+        'Status',
+        'Data Limite',
+        'Cliente',
+        'CNPJ / CPF',
+        'Cidade',
+        'Técnico',
+        'Prestador',
+        'Justificativa do Abono'
+      ]
+
       const filtrado = bruto.map(row => {
         const novo = {}
 
-        colunasPermitidas.forEach(col => {
-          let v = row[col] ?? ''
+        colunasDesejadas.forEach(nomeDesejado => {
+          const chaveReal = encontrarColuna(row, nomeDesejado)
+          let valor = chaveReal ? row[chaveReal] : ''
 
-          if (col === 'Data Limite') {
-            v = normalizarData(v)
+          if (nomeDesejado === 'Data Limite') {
+            valor = normalizarData(valor)
           }
 
-          if (col === 'CNPJ / CPF') {
-            v = limparCpfCnpj(v)
+          if (nomeDesejado === 'CNPJ / CPF') {
+            valor = limparCpfCnpj(valor)
           }
 
-          novo[col] = v
+          novo[nomeDesejado] = valor
         })
 
         return novo
       })
 
+      console.log('Linhas processadas:', filtrado.length)
       onUpload(filtrado)
     } catch (err) {
       console.error(err)
