@@ -6,23 +6,62 @@ function Upload({ onUpload }) {
   const [error, setError] = useState(null)
   const [fileName, setFileName] = useState(null)
 
-  // ✅ COLUNAS QUE VOCÊ QUER MANTER (as mesmas de antes)
+  // As 13 colunas oficiais do relatório Mob
   const colunasPermitidas = [
-    'Status',
+    'Origem',
+    'Chamado',
+    'Numero Referencia',
+    'Contratante',
     'Serviço',
+    'Status',
     'Data Limite',
     'Cliente',
+    'CNPJ / CPF',
+    'Cidade',
     'Técnico',
     'Prestador',
     'Justificativa do Abono'
   ]
+
+  // Converte datas Excel (ex: 46266) para dd/mm/aaaa
+  function normalizarData(valor) {
+    if (valor === null || valor === undefined || valor === '') return ''
+
+    // Se vier como número (serial Excel)
+    if (typeof valor === 'number') {
+      const parsed = XLSX.SSF.parse_date_code(valor)
+      if (!parsed) return ''
+      const dia = String(parsed.d).padStart(2, '0')
+      const mes = String(parsed.m).padStart(2, '0')
+      const ano = parsed.y
+      return `${dia}/${mes}/${ano}`
+    }
+
+    let v = String(valor).trim()
+
+    // Tira hora caso venha "2025-01-30 00:00:00"
+    if (v.includes(' ')) v = v.split(' ')[0]
+
+    // Formato ISO 2025-01-30
+    if (v.includes('-')) {
+      const [ano, mes, dia] = v.split('-')
+      return `${dia.padStart(2, '0')}/${mes.padStart(2, '0')}/${ano}`
+    }
+
+    return v
+  }
+
+  // Limpeza de CPF/CNPJ (remove =, aspas, etc.)
+  function limparCpfCnpj(valor) {
+    if (!valor) return ''
+    return String(valor).replace(/["'=]/g, '').trim()
+  }
 
   const handleFileChange = async (event) => {
     const file = event.target.files[0]
     if (!file) return
 
     if (typeof onUpload !== 'function') {
-      console.error('onUpload não é uma função. Verifique o App.jsx.')
       setError('Erro interno: callback de upload não encontrado.')
       return
     }
@@ -32,41 +71,37 @@ function Upload({ onUpload }) {
     setFileName(file.name)
 
     try {
-      // Ler o arquivo direto no navegador
       const data = await file.arrayBuffer()
-      const workbook = XLSX.read(data, { type: 'array' })
-
-      // Pega a primeira aba
+      const workbook = XLSX.read(data, { type: 'array', cellDates: true })
       const firstSheetName = workbook.SheetNames[0]
       const worksheet = workbook.Sheets[firstSheetName]
 
-      // Converte para JSON (array de objetos)
-      const rowsBruto = XLSX.utils.sheet_to_json(worksheet, { defval: '' })
+      const bruto = XLSX.utils.sheet_to_json(worksheet, { defval: '' })
 
-      console.log('Linhas lidas do arquivo (bruto):', rowsBruto.length)
+      const filtrado = bruto.map(row => {
+        const novo = {}
 
-      if (!Array.isArray(rowsBruto) || rowsBruto.length === 0) {
-        setError('Arquivo vazio ou formato inválido.')
-        setLoading(false)
-        return
-      }
-
-      // ✅ FILTRAR SÓ AS COLUNAS QUE VOCÊ QUER
-      const rowsFiltradas = rowsBruto.map(row => {
-        const novaRow = {}
         colunasPermitidas.forEach(col => {
-          novaRow[col] = row[col] || ''
+          let v = row[col] ?? ''
+
+          if (col === 'Data Limite') {
+            v = normalizarData(v)
+          }
+
+          if (col === 'CNPJ / CPF') {
+            v = limparCpfCnpj(v)
+          }
+
+          novo[col] = v
         })
-        return novaRow
+
+        return novo
       })
 
-      console.log('Linhas filtradas (só colunas permitidas):', rowsFiltradas.length)
-
-      // Chama o callback do App.jsx com os dados filtrados
-      onUpload(rowsFiltradas)
+      onUpload(filtrado)
     } catch (err) {
       console.error(err)
-      setError('Falha ao processar o arquivo. Verifique se é um Excel/CSV válido.')
+      setError('Falha ao processar o arquivo.')
     } finally {
       setLoading(false)
     }
@@ -75,7 +110,7 @@ function Upload({ onUpload }) {
   return (
     <div className="upload-box">
       <h2>Envie o relatório Mob</h2>
-      <p>Selecione o arquivo Excel/CSV exportado do sistema para gerar o painel.</p>
+      <p>Selecione o arquivo Excel/CSV para gerar o painel.</p>
 
       <label className="file-input-label">
         <input
