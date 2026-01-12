@@ -1,6 +1,4 @@
 import { useState, useMemo } from 'react'
-// REMOVEMOS o xlsx antigo
-// import * as XLSX from 'xlsx'
 import ExcelJS from 'exceljs'
 import { saveAs } from 'file-saver'
 import './App.css'
@@ -61,16 +59,15 @@ function App() {
   }
 
   function limparCpfCnpj(valor) {
-  if (!valor) return ''
-  let v = String(valor)
-  v = v.split('=').join('')
-  v = v.split('"').join('')
-  if (v.charAt(0) === "'") {
-    v = v.substring(1)
+    if (!valor) return ''
+    let v = String(valor)
+    v = v.split('=').join('')
+    v = v.split('"').join('')
+    if (v.charAt(0) === "'") {
+      v = v.substring(1)
+    }
+    return v.trim()
   }
-  return v.trim()
-}
-
 
   // --------- UPLOAD ---------
 
@@ -162,7 +159,17 @@ function App() {
     }
 
     const dados = soStatusPermitidos
-    const headers = Object.keys(dados[0]).filter(h => h !== 'Prioridade')
+
+    // ✅ COLUNAS NA ORDEM CERTA (sem Prioridade, só as 7 principais)
+    const headers = [
+      'Status',
+      'Serviço',
+      'Data Limite',
+      'Cliente',
+      'Técnico',
+      'Prestador',
+      'Justificativa do Abono'
+    ]
 
     // ------ CRIA WORKBOOK / WORKSHEET ------
     const workbook = new ExcelJS.Workbook()
@@ -272,12 +279,9 @@ function App() {
     // ------ GERAR ARQUIVO E BAIXAR ------
     const buffer = await workbook.xlsx.writeBuffer()
     const blob = new Blob([buffer], {
-      type:
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     })
-    const nomeArquivo = `pendencias_mob_${new Date()
-      .toISOString()
-      .slice(0, 10)}.xlsx`
+    const nomeArquivo = `pendencias_mob_${new Date().toISOString().slice(0, 10)}.xlsx`
     saveAs(blob, nomeArquivo)
   }
 

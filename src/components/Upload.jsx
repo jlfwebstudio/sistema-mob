@@ -6,6 +6,17 @@ function Upload({ onUpload }) {
   const [error, setError] = useState(null)
   const [fileName, setFileName] = useState(null)
 
+  // ✅ COLUNAS QUE VOCÊ QUER MANTER (as mesmas de antes)
+  const colunasPermitidas = [
+    'Status',
+    'Serviço',
+    'Data Limite',
+    'Cliente',
+    'Técnico',
+    'Prestador',
+    'Justificativa do Abono'
+  ]
+
   const handleFileChange = async (event) => {
     const file = event.target.files[0]
     if (!file) return
@@ -30,18 +41,29 @@ function Upload({ onUpload }) {
       const worksheet = workbook.Sheets[firstSheetName]
 
       // Converte para JSON (array de objetos)
-      const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' })
+      const rowsBruto = XLSX.utils.sheet_to_json(worksheet, { defval: '' })
 
-      console.log('Linhas lidas do arquivo:', rows.length)
+      console.log('Linhas lidas do arquivo (bruto):', rowsBruto.length)
 
-      if (!Array.isArray(rows) || rows.length === 0) {
+      if (!Array.isArray(rowsBruto) || rowsBruto.length === 0) {
         setError('Arquivo vazio ou formato inválido.')
         setLoading(false)
         return
       }
 
-      // Chama o callback do App.jsx com os dados
-      onUpload(rows)
+      // ✅ FILTRAR SÓ AS COLUNAS QUE VOCÊ QUER
+      const rowsFiltradas = rowsBruto.map(row => {
+        const novaRow = {}
+        colunasPermitidas.forEach(col => {
+          novaRow[col] = row[col] || ''
+        })
+        return novaRow
+      })
+
+      console.log('Linhas filtradas (só colunas permitidas):', rowsFiltradas.length)
+
+      // Chama o callback do App.jsx com os dados filtrados
+      onUpload(rowsFiltradas)
     } catch (err) {
       console.error(err)
       setError('Falha ao processar o arquivo. Verifique se é um Excel/CSV válido.')
