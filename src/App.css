@@ -91,346 +91,241 @@ header p {
 }
 
 .upload-box:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 8px 24px rgba(0,0,0,.8);
 }
 
 .upload-box h2 {
-  font-size: 26px;
-  margin-bottom: 12px;
-  color: #ffffff;
+  color: #fff;
+  font-size: 22px;
+  margin-bottom: 20px;
   font-weight: 600;
 }
 
-.upload-box p {
-  color: #b8b8b8;
-  margin-bottom: 24px;
-  font-size: 15px;
-}
-
-.file-input-label {
-  display: inline-block;
-  cursor: pointer;
-}
-
-.file-input-button {
-  display: inline-block;
-  margin-top: 16px;
-  padding: 14px 32px;
-  font-size: 16px;
-  font-weight: 600;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-radius: 10px;
+.upload-box input[type="file"] {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  margin-bottom: 18px;
+  border: 2px dashed #555;
+  border-radius: 8px;
+  background: #0f0f0f;
+  color: #ccc;
+  font-size: 14px;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
 }
 
-.file-input-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+.upload-box input[type="file"]:hover {
+  border-color: #4a90e2;
+  background: #1a1a1a;
 }
 
-.file-name {
-  color: #38ef7d;
-  margin-top: 12px;
-  font-size: 14px;
+.upload-box button {
+  width: 100%;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #4a90e2, #357abd);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
   font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.4);
 }
 
-.error-message {
+.upload-box button:hover {
+  background: linear-gradient(135deg, #357abd, #2868a8);
+  box-shadow: 0 6px 16px rgba(74, 144, 226, 0.6);
+  transform: translateY(-2px);
+}
+
+.upload-box button:disabled {
+  background: #333;
+  color: #777;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.upload-box .error {
   color: #ff6b6b;
-  margin-top: 12px;
   font-size: 14px;
+  margin-top: 12px;
+  font-weight: 500;
+}
+
+.upload-box .success {
+  color: #51cf66;
+  font-size: 14px;
+  margin-top: 12px;
+  font-weight: 500;
 }
 
 /* ============================================ */
-/*           AÇÕES (BOTÕES SUPERIORES)          */
+/*              ACTIONS (BOTÕES)                */
 /* ============================================ */
 
 .actions {
   display: flex;
-  gap: 14px;
+  gap: 15px;
+  justify-content: center;
   width: 100%;
-  max-width: 1380px;
-  flex-wrap: wrap;
+  max-width: 600px;
 }
 
 .actions button {
-  padding: 12px 26px;
-  font-size: 15px;
-  font-weight: 600;
-  border-radius: 10px;
+  flex: 1;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #4a90e2, #357abd);
+  color: #fff;
   border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.4);
 }
 
-.actions .download {
-  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-  color: white;
-}
-
-.actions .download:hover {
+.actions button:hover {
+  background: linear-gradient(135deg, #357abd, #2868a8);
+  box-shadow: 0 6px 16px rgba(74, 144, 226, 0.6);
   transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(17, 153, 142, 0.5);
-}
-
-.actions button:not(.download) {
-  background: linear-gradient(135deg, #757f9a 0%, #d7dde8 100%);
-  color: #2c3e50;
-}
-
-.actions button:not(.download):hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(117, 127, 154, 0.4);
-}
-
-.actions .limpar-filtros {
-  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
-  color: white;
-}
-
-.actions .limpar-filtros:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(231, 76, 60, 0.5);
 }
 
 /* ============================================ */
-/*            INFO DE REGISTROS                 */
-/* ============================================ */
-
-.info-registros {
-  background: #ecf0f1;
-  padding: 12px 20px;
-  border-radius: 8px;
-  text-align: center;
-  font-size: 14px;
-  color: #2c3e50;
-  width: 100%;
-  max-width: 1380px;
-}
-
-.info-registros strong {
-  color: #667eea;
-  font-weight: 700;
-}
-
-/* ============================================ */
-/*                 TABELA                       */
+/*              TABELA DE DADOS                 */
 /* ============================================ */
 
 .table-container {
-  background: #ffffff;
-  padding: 18px 22px;
-  border-radius: 14px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
   width: 100%;
-  max-width: 1380px;
   overflow-x: auto;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.4);
+  padding: 20px;
 }
 
-table {
+.data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 10.5px;
-  table-layout: auto;
+  font-size: 12px;
+  background: white;
 }
 
-th {
-  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
-  color: #ffffff;
-  padding: 0;
+.data-table th {
+  background: #274472;
+  color: white;
+  font-weight: bold;
+  padding: 12px 10px;
   text-align: left;
-  font-weight: 600;
-  font-size: 9.5px;
-  text-transform: uppercase;
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border: 1px solid #1a3352;
 }
 
 .th-content {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: 6px 8px;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
 }
 
-.th-content > span {
-  flex: 1;
-  white-space: nowrap;
-}
-
-/* 🔹 FILTRO TIPO EXCEL */
-.filter-dropdown-wrapper {
+.filter-dropdown {
   position: relative;
 }
 
 .filter-btn {
-  background: none;
+  background: transparent;
   border: none;
-  color: #fff;
+  color: white;
   cursor: pointer;
-  font-size: 12px;
-  padding: 2px 4px;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.2s;
 }
 
 .filter-btn:hover {
-  opacity: 0.8;
-  transform: scale(1.1);
+  background: rgba(255,255,255,0.1);
 }
 
-.filter-dropdown {
+.filter-menu {
   display: none;
   position: absolute;
   top: 100%;
   right: 0;
   background: white;
-  border: 1px solid #ddd;
+  border: 1px solid #ccc;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  max-height: 300px;
+  overflow-y: auto;
+  min-width: 200px;
+  z-index: 100;
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
-  min-width: 220px;
-  max-height: 350px;
-  overflow-y: auto;
+  margin-top: 4px;
 }
 
-.filter-dropdown.aberto {
+.filter-dropdown:hover .filter-menu {
   display: block;
-}
-
-.filter-actions {
-  display: flex;
-  gap: 6px;
-  padding: 8px;
-  border-bottom: 1px solid #eee;
-  background: #f9f9f9;
-}
-
-.btn-selecionar-todos,
-.btn-desmarcar-todos {
-  flex: 1;
-  padding: 6px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-selecionar-todos {
-  background: #667eea;
-  color: white;
-}
-
-.btn-selecionar-todos:hover {
-  background: #5568d3;
-}
-
-.btn-desmarcar-todos {
-  background: #e74c3c;
-  color: white;
-}
-
-.btn-desmarcar-todos:hover {
-  background: #c0392b;
-}
-
-.filter-options {
-  max-height: 280px;
-  overflow-y: auto;
 }
 
 .filter-option {
   display: flex;
   align-items: center;
+  gap: 8px;
   padding: 8px 12px;
   cursor: pointer;
-  transition: background 0.2s ease;
-  font-size: 12px;
-  color: #2c3e50;
+  color: #333;
+  font-size: 13px;
+  transition: background 0.2s;
 }
 
 .filter-option:hover {
   background: #f0f0f0;
 }
 
-.filter-option input {
-  margin-right: 8px;
+.filter-option input[type="checkbox"] {
   cursor: pointer;
 }
 
-th.filtro-ativo {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-td {
-  padding: 5px 7px;
-  border-bottom: 1px solid #e8e8e8;
-  color: #2c3e50;
-  font-size: 10.5px;
-  vertical-align: top;
+.data-table td {
+  padding: 10px;
+  border: 1px solid #e0e0e0;
   white-space: nowrap;
-  overflow: visible;
-  line-height: 1.3;
-}
-
-tbody tr:nth-child(even) {
-  background: #fafafa;
-}
-
-tbody tr:hover {
-  background: #eef4ff;
-  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px;
 }
 
 /* ============================================ */
-/*     AJUSTE DE LARGURA DAS COLUNAS            */
+/*              CORES DAS LINHAS                */
 /* ============================================ */
 
-th:nth-child(1), td:nth-child(1) { min-width: 50px; }
-th:nth-child(2), td:nth-child(2) { min-width: 70px; }
-th:nth-child(3), td:nth-child(3) { min-width: 75px; }
-th:nth-child(4), td:nth-child(4) { min-width: 50px; }
-th:nth-child(5), td:nth-child(5) { min-width: 50px; }
-th:nth-child(6), td:nth-child(6) { min-width: 80px; }
-th:nth-child(7), td:nth-child(7) { min-width: 100px; }
-th:nth-child(8), td:nth-child(8) { min-width: 150px; }
-th:nth-child(9), td:nth-child(9) { min-width: 120px; }
-th:nth-child(10), td:nth-child(10) { min-width: 90px; }
-th:nth-child(11), td:nth-child(11) { min-width: 100px; }
-th:nth-child(12), td:nth-child(12) { min-width: 120px; }
-th:nth-child(13), td:nth-child(13) { min-width: 180px; }
-
-/* ============================================ */
-/*           PRIORIDADES (CORES)                */
-/* ============================================ */
-
-.prioridade-vencida {
-  background: linear-gradient(90deg, #ffebee 0%, #ffcdd2 100%) !important;
-  border-left: 5px solid #e74c3c;
-  font-weight: 600;
-  color: #b71c1c !important;
+.row-par {
+  background: #f9f9f9;
 }
 
-.prioridade-urgente {
-  background: linear-gradient(90deg, #fff3e0 0%, #ffe0b2 100%) !important;
-  border-left: 5px solid #f39c12;
-  font-weight: 600;
-  color: #e65100 !important;
+.row-impar {
+  background: #ffffff;
 }
 
-.prioridade-alta {
-  background: linear-gradient(90deg, #fff9c4 0%, #fff59d 100%) !important;
-  border-left: 5px solid #f1c40f;
-  font-weight: 600;
-  color: #9e7700 !important;
+.row-hoje {
+  background: #fff8e1 !important;
+}
+
+.row-hoje td {
+  background: #fff8e1 !important;
+}
+
+.row-atrasado {
+  background: #fad4d4 !important;
+}
+
+.row-atrasado td {
+  background: #fad4d4 !important;
 }
 
 /* ============================================ */
@@ -454,12 +349,13 @@ th:nth-child(13), td:nth-child(13) { min-width: 180px; }
     flex-direction: column;
   }
 
-  table {
+  .data-table {
     font-size: 11px;
   }
 
-  th, td {
-    padding: 8px 10px;
+  .data-table th,
+  .data-table td {
+    padding: 8px 6px;
   }
 
   .filter-dropdown {

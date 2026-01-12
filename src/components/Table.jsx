@@ -1,96 +1,102 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo } from 'react'
+import * as XLSX from 'xlsx'
 
 function Table({ data }) {
-  // Colunas na ORDEM EXATA que você pediu
   const colunas = [
-    "Origem",
-    "Chamado",
-    "Numero Referencia",
-    "Contratante",
-    "Serviço",
-    "Status",
-    "Data Limite",
-    "Cliente",
-    "CNPJ / CPF",
-    "Cidade",
-    "Técnico",
-    "Prestador",
-    "Justificativa do Abono"
-  ];
+    'Origem',
+    'Chamado',
+    'Numero Referencia',
+    'Contratante',
+    'Serviço',
+    'Status',
+    'Data Limite',
+    'Cliente',
+    'CNPJ / CPF',
+    'Cidade',
+    'Técnico',
+    'Prestador',
+    'Justificativa do Abono'
+  ]
 
-  // Filtros armazenam valores selecionados
-  const [filtros, setFiltros] = useState({});
+  const [filtros, setFiltros] = useState({})
 
-  function toggleFiltro(coluna, valor) {
-    setFiltros((prev) => {
-      const atual = prev[coluna] || [];
-      const existe = atual.includes(valor);
+  const opcoesUnicas = useMemo(() => {
+    const opcoes = {}
+    colunas.forEach(col => {
+      opcoes[col] = [...new Set(data.map(row => row[col] || '—'))].sort()
+    })
+    return opcoes
+  }, [data])
 
-      const novo = existe
-        ? atual.filter((v) => v !== valor)
-        : [...atual, valor];
-
-      return { ...prev, [coluna]: novo };
-    });
+  const toggleFiltro = (coluna, valor) => {
+    setFiltros(prev => {
+      const atual = prev[coluna] || []
+      const novo = atual.includes(valor)
+        ? atual.filter(v => v !== valor)
+        : [...atual, valor]
+      return { ...prev, [coluna]: novo }
+    })
   }
 
-  // Lista de valores únicos por coluna
-  const valoresUnicos = useMemo(() => {
-    const obj = {};
-    colunas.forEach((col) => {
-      obj[col] = [...new Set(data.map((r) => r[col] || ""))];
-    });
-    return obj;
-  }, [data]);
-
-  // Filtragem
   const dadosFiltrados = useMemo(() => {
-    return data.filter((row) => {
-      return Object.entries(filtros).every(([col, valores]) => {
-        if (!valores.length) return true;
-        return valores.includes(row[col]);
-      });
-    });
-  }, [data, filtros]);
+    return data.filter(row => {
+      return colunas.every(col => {
+        const filtroAtivo = filtros[col]
+        if (!filtroAtivo || filtroAtivo.length === 0) return true
+        const valorCelula = row[col] || '—'
+        return filtroAtivo.includes(valorCelula)
+      })
+    })
+  }, [data, filtros])
 
-  // Cores das linhas (hoje / atrasado)
-  function corLinha(row) {
-    const v = row["Data Limite"];
-    if (!v) return "";
+  const getCorLinha = (row) => {
+    const dataLimite = row['Data Limite']
+    if (!dataLimite || dataLimite === '—') return ''
 
-    const [d, m, a] = v.split("/");
-    const dataRow = new Date(a, m - 1, d);
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
+    const [dia, mes, ano] = dataLimite.split('/').map(Number)
+    if (!dia || !mes || !ano) return ''
 
-    if (dataRow < hoje) return "row-atrasado";
-    if (dataRow.getTime() === hoje.getTime()) return "row-hoje";
+    const limite = new Date(ano, mes - 1, dia)
+    const hoje = new Date()
+    hoje.setHours(0, 0, 0, 0)
+    limite.setHours(0, 0, 0, 0)
 
-    return "";
+    if (limite < hoje) return 'row-atrasado'
+    if (limite.getTime() === hoje.getTime()) return 'row-hoje'
+    return ''
+  }
+
+  const exportarExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(dadosFiltrados)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Dados')
+    XLSX.writeFile(wb, 'relatorio_mobyan.xlsx')
   }
 
   return (
-    <div className="table-wrapper">
+    <div className="table-container">
+      <div className="actions">
+        <button onClick={exportarExcel}>📥 Exportar para Excel</button>
+      </div>
+
       <table className="data-table">
         <thead>
           <tr>
-            {colunas.map((col) => (
+            {colunas.map(col => (
               <th key={col}>
                 <div className="th-content">
                   <span>{col}</span>
-
                   <div className="filter-dropdown">
                     <button className="filter-btn">▼</button>
-
                     <div className="filter-menu">
-                      {valoresUnicos[col].map((valor) => (
-                        <label key={valor} className="filter-option">
+                      {opcoesUnicas[col]?.map(opcao => (
+                        <label key={opcao} className="filter-option">
                           <input
                             type="checkbox"
-                            checked={(filtros[col] || []).includes(valor)}
-                            onChange={() => toggleFiltro(col, valor)}
+                            checked={(filtros[col] || []).includes(opcao)}
+                            onChange={() => toggleFiltro(col, opcao)}
                           />
-                          {valor || "—"}
+                          <span>{opcao}</span>
                         </label>
                       ))}
                     </div>
@@ -100,22 +106,21 @@ function Table({ data }) {
             ))}
           </tr>
         </thead>
-
         <tbody>
           {dadosFiltrados.map((row, idx) => (
             <tr
               key={idx}
-              className={`${idx % 2 === 0 ? "row-par" : "row-impar"} ${corLinha(row)}`}
+              className={`${idx % 2 === 0 ? 'row-par' : 'row-impar'} ${getCorLinha(row)}`}
             >
-              {colunas.map((col) => (
-                <td key={col}>{row[col] || "—"}</td>
+              {colunas.map(col => (
+                <td key={col}>{row[col] || '—'}</td>
               ))}
             </tr>
           ))}
         </tbody>
       </table>
     </div>
-  );
+  )
 }
 
-export default Table;
+export default Table
