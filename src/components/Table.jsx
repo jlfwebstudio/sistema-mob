@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 function Table({ data, allData, filtros, setFiltros }) {
   const [open, setOpen] = useState({})
 
-  if (!data || data.length === 0) return null
+  if (!Array.isArray(data) || data.length === 0) return null
 
   const colunas = Object.keys(data[0])
 
@@ -11,13 +11,16 @@ function Table({ data, allData, filtros, setFiltros }) {
     const m = {}
     colunas.forEach(c => {
       const valores = new Set()
-      allData.forEach(r => valores.add(String(r[c] || '(Vazio)')))
+      allData.forEach(r => {
+        const v = r[c] ? String(r[c]) : '(Vazio)'
+        valores.add(v)
+      })
       m[c] = Array.from(valores).sort()
     })
     return m
-  }, [allData])
+  }, [allData, colunas])
 
-  const toggle = (col) => {
+  const toggleDropdown = (col) => {
     setOpen(p => ({ ...p, [col]: !p[col] }))
   }
 
@@ -36,9 +39,11 @@ function Table({ data, allData, filtros, setFiltros }) {
     setFiltros({ ...filtros, [col]: [] })
 
   function cor(row) {
-    if (!row['Data Limite']) return ''
-    const [d, m, a] = row['Data Limite'].split('/')
+    const str = row['Data Limite']
+    if (!str) return ''
+    const [d, m, a] = str.split('/')
     const dt = new Date(a, m - 1, d)
+    if (isNaN(dt)) return ''
     const hoje = new Date()
     hoje.setHours(0,0,0,0)
     dt.setHours(0,0,0,0)
@@ -55,17 +60,33 @@ function Table({ data, allData, filtros, setFiltros }) {
             {colunas.map(col => (
               <th key={col}>
                 <div className="header-cell">
-                  {col}
-                  <button className="filter-btn" onClick={() => toggle(col)}>▼</button>
+                  <span>{col}</span>
+                  <button
+                    type="button"
+                    className="filter-btn"
+                    onClick={() => toggleDropdown(col)}
+                  >
+                    ▼
+                  </button>
                 </div>
-
                 {open[col] && (
                   <div className="filter-dropdown">
                     <div className="filter-controls">
-                      <button className="filter-btn-small" onClick={() => selecionarTodos(col)}>✓</button>
-                      <button className="filter-btn-small" onClick={() => limparColuna(col)}>✗</button>
+                      <button
+                        type="button"
+                        className="filter-btn-small seleciona"
+                        onClick={() => selecionarTodos(col)}
+                      >
+                        ✓ Todos
+                      </button>
+                      <button
+                        type="button"
+                        className="filter-btn-small limpa"
+                        onClick={() => limparColuna(col)}
+                      >
+                        ✗ Nenhum
+                      </button>
                     </div>
-
                     <div className="filter-options">
                       {opcoes[col].map(o => (
                         <label key={o} className="filter-option-label">
@@ -84,9 +105,8 @@ function Table({ data, allData, filtros, setFiltros }) {
             ))}
           </tr>
         </thead>
-
         <tbody>
-          {data.map((r, i) (
+          {data.map((r, i) => (
             <tr key={i} className={cor(r)}>
               {colunas.map(c => (
                 <td key={c}>{r[c] || '—'}</td>

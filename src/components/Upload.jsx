@@ -33,35 +33,45 @@ function Upload({ onUpload }) {
     }
 
     let s = String(valor).trim()
+    if (!s) return ''
 
     if (s.includes(' ')) s = s.split(' ')[0]
 
-    const iso = s.split('-')
-    if (iso.length === 3 && iso[0].length === 4) {
-      return `${iso[2].padStart(2, '0')}/${iso[1].padStart(2, '0')}/${iso[0]}`
+    const isoParts = s.split('-')
+    if (isoParts.length === 3 && isoParts[0].length === 4) {
+      const [a, m, d] = isoParts
+      return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${a}`
     }
 
     if (s.includes('/')) {
       const p = s.split('/')
       if (p.length === 3) {
-        const d = p[0].padStart(2, '0')
-        const m = p[1].padStart(2, '0')
-        const a = p[2]
-        return `${d}/${m}/${a}`
+        const [p1, p2, p3] = p
+        if (p3.length === 4) {
+          const n1 = parseInt(p1, 10)
+          const n2 = parseInt(p2, 10)
+
+          if (n1 > 12) {
+            return `${p1.padStart(2, '0')}/${p2.padStart(2, '0')}/${p3}`
+          }
+          if (n2 > 12) {
+            return `${p2.padStart(2, '0')}/${p1.padStart(2, '0')}/${p3}`
+          }
+          return `${p1.padStart(2, '0')}/${p2.padStart(2, '0')}/${p3}`
+        }
       }
     }
 
     return ''
   }
 
-  const statusPermitidos = status => {
+  const statusPermitidos = (status) => {
     if (!status) return false
     const s = String(status).toLowerCase()
-
     return (
       s.includes('encaminh') ||
-      s.includes('campo') ||
       s.includes('transfer') ||
+      s.includes('campo') ||
       s.includes('proced') ||
       s.includes('reenc')
     )
@@ -83,29 +93,45 @@ function Upload({ onUpload }) {
     try {
       const buffer = await file.arrayBuffer()
       const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
-      const sheet = workbook.Sheets[workbook.SheetNames[0]]
-      const linhas = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+      const nomePrimeiraAba = workbook.SheetNames[0]
+      const sheet = workbook.Sheets[nomePrimeiraAba]
+      const bruto = XLSX.utils.sheet_to_json(sheet, { defval: '' })
 
-      const processados = linhas
+      if (!Array.isArray(bruto) || bruto.length === 0) {
+        setError('Arquivo vazio ou formato inválido.')
+        setLoading(false)
+        return
+      }
+
+      const processados = bruto
         .map(row => ({
-          'Origem': 'MOB',
-          'Chamado': row['Chamado'] || '',
+          Origem: 'MOB',
+          Chamado: row['Chamado'] || '',
           'Numero Referencia': row['Numero Referencia'] || '',
-          'Contratante': row['Contratante'] || '',
-          'Serviço': row['Serviço'] || '',
-          'Status': row['Status'] || '',
+          Contratante: row['Contratante'] || '',
+          Serviço: row['Serviço'] || '',
+          Status: row['Status'] || '',
           'Data Limite': normalizarData(row['Data Limite']),
-          'Cliente': row['Nome Cliente'] || '',
+          Cliente: row['Nome Cliente'] || '',
           'CNPJ / CPF': limparCpfCnpj(row['CNPJ / CPF']),
-          'Cidade': row['Cidade'] || '',
-          'Técnico': row['Técnico'] || '',
-          'Prestador': row['Prestador'] || ''
+          Cidade: row['Cidade'] || '',
+          Técnico: row['Técnico'] || '',
+          Prestador: row['Prestador'] || '',
+          'Justificativa do Abono': row['Justificativa do Abono'] || ''
         }))
-        .filter(x => statusPermitidos(x.Status))
+        .filter(r => statusPermitidos(r.Status))
+
+      if (processados.length === 0) {
+        setError('Nenhuma linha com status permitido encontrada.')
+        setLoading(false)
+        return
+      }
 
       processados.sort((a, b) => {
-        const [d1, m1, a1] = a['Data Limite'].split('/')
-        const [d2, m2, a2] = b['Data Limite'].split('/')
+        const aStr = a['Data Limite'] || '99/99/9999'
+        const bStr = b['Data Limite'] || '99/99/9999'
+        const [d1, m1, a1] = aStr.split('/')
+        const [d2, m2, a2] = bStr.split('/')
         const v1 = `${a1}${m1}${d1}`
         const v2 = `${a2}${m2}${d2}`
         return v1.localeCompare(v2)
@@ -113,8 +139,8 @@ function Upload({ onUpload }) {
 
       onUpload(processados)
     } catch (err) {
-      setError('Erro ao processar arquivo.')
       console.error(err)
+      setError('Erro ao ler o arquivo. Verifique o formato.')
     } finally {
       setLoading(false)
     }
@@ -133,10 +159,16 @@ function Upload({ onUpload }) {
           disabled={loading}
           style={{ display: 'none' }}
         />
-        <span className="file-input-button">
-          {loading ? '⏳ Processando...' : '📂 Escolher Arquivo'}
-        </span>
       </label>
+
+      <button
+        className="file-input-button"
+        type="button"
+        onClick={() => document.querySelector('.upload-box input[type="file"]').click()}
+        disabled={loading}
+      >
+        {loading ? '⏳ Processando...' : '📂 Escolher Arquivo'}
+      </button>
 
       {fileName && <p className="file-name">✓ {fileName}</p>}
       {error && <p className="error-message">{error}</p>}

@@ -10,6 +10,12 @@ function App() {
   const [tabelaVisivel, setTabelaVisivel] = useState(false)
 
   const receberUpload = (lista) => {
+    if (!Array.isArray(lista) || lista.length === 0) {
+      setDados([])
+      setTabelaVisivel(false)
+      return
+    }
+
     setDados(lista)
     setTabelaVisivel(true)
 
@@ -25,7 +31,9 @@ function App() {
   const filtrar = (row) => {
     for (const col of Object.keys(filtros)) {
       const filtro = filtros[col]
-      if (filtro.length > 0 && !filtro.includes(String(row[col]))) return false
+      if (!filtro || filtro.length === 0) continue
+      const valor = row[col] ? String(row[col]) : '(Vazio)'
+      if (!filtro.includes(valor)) return false
     }
     return true
   }
@@ -33,24 +41,35 @@ function App() {
   const dadosFiltrados = dados.filter(filtrar)
 
   const exportarPendencias = () => {
+    if (!dadosFiltrados.length) {
+      alert('Nenhum dado filtrado para exportar.')
+      return
+    }
+
     const hoje = new Date()
     hoje.setHours(0, 0, 0, 0)
 
     const vencidos = dadosFiltrados.filter(row => {
-      const partes = row['Data Limite'].split('/')
-      const dt = new Date(partes[2], partes[1] - 1, partes[0])
+      const str = row['Data Limite']
+      if (!str) return false
+      const [d, m, a] = str.split('/')
+      const dt = new Date(a, m - 1, d)
+      if (isNaN(dt)) return false
       dt.setHours(0, 0, 0, 0)
       return dt <= hoje
     })
 
+    if (!vencidos.length) {
+      alert('Nenhuma pendência vencida até hoje.')
+      return
+    }
+
     const wb = XLSX.utils.book_new()
-    const ws = XLSX.utils.aoa_to_sheet([])
+    const cab = Object.keys(vencidos[0])
+    const ws = XLSX.utils.aoa_to_sheet([cab])
 
-    const header = Object.keys(vencidos[0] || {})
-    XLSX.utils.sheet_add_aoa(ws, [header])
-
-    vencidos.forEach(row => {
-      XLSX.utils.sheet_add_aoa(ws, [Object.values(row)], { origin: -1 })
+    vencidos.forEach(r => {
+      XLSX.utils.sheet_add_aoa(ws, [cab.map(c => r[c])], { origin: -1 })
     })
 
     XLSX.utils.book_append_sheet(wb, ws, 'Pendências')
@@ -59,7 +78,7 @@ function App() {
 
   const limparFiltros = () => {
     const inicial = {}
-    Object.keys(filtros).forEach(c => inicial[c] = [])
+    Object.keys(filtros).forEach(c => { inicial[c] = [] })
     setFiltros(inicial)
   }
 
@@ -88,7 +107,9 @@ function App() {
             <button className="download" onClick={exportarPendencias}>
               📥 Exportar Pendências
             </button>
-            <button onClick={() => window.location.reload()}>🔄 Novo Upload</button>
+            <button onClick={() => window.location.reload()}>
+              🔄 Novo Upload
+            </button>
             {temFiltros && (
               <button className="limpar-filtros" onClick={limparFiltros}>
                 ✖ Limpar Filtros
